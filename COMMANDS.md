@@ -18,7 +18,7 @@ Identitas selalu berdasarkan WhatsApp JID yang dinormalisasi ke nomor.
 
 | Command | Fungsi |
 |---|---|
-| `.menu` | Menu personal: mention asli, role, jam+detik, tanggal Indonesia, cuaca, jumlah fitur & command aktif, 3 pilihan angka |
+| `.menu` | Kartu ringkasan visual (role, mode, waktu, runtime, cuaca, statistik), lalu daftar kategori/command sesuai role |
 | `.help` | Bantuan singkat |
 | `.user` | JID, nomor, role, status akun, mode GROUP/PRIVATE |
 | `.vip` | Informasi/aktivasi VIP (private chat didukung) |
@@ -36,7 +36,9 @@ Command lama `/set`, `/list`, `/detail A1`, `/edit`, `/update`, `/batal`, `/send
 |---|---|
 | `.pdf` | Membaca PDF dari caption/reply |
 | `.img` | Analisis gambar via vision model |
-| `.iqc`, `.tqc`, `.wq` | Image quote (foto asli bisa dipertahankan dengan `--raw`) |
+| `.iqc`, `.iqc2`, `.iqc5`, `.iqcdark`, `.iqcpink`, `.iqcpinkv2`, `.iqcmerah` | Mockup iPhone quote berbagai palet; `.iqc` mendukung foto reply dan `--raw` |
+| `.tqc`, `.tiktokchat`, `.wq`, `.iqcwin`, `.ytcomment` | Mockup chat TikTok, Windows Classic, dan komentar YouTube; avatar dapat memakai reply gambar |
+| `.igqc`, `.igpost`, `.igstory`, `.igprofile`, `.igdm`, `.ignote` | Mockup Instagram iOS, bukan screenshot/komentar asli |
 | `.rvo` | Meneruskan foto biasa yang dikirim eksplisit dengan caption `.rvo` atau reply. File sekali lihat ditolak; file sementara dihapus. |
 
 ## Downloader publik (VIP/ADMIN)

@@ -21,6 +21,11 @@ export const config = {
   imageMaxTextChars: Number(process.env.IMAGE_MAX_TEXT || 500),
   imageTimeoutMs: Number(process.env.IMAGE_TIMEOUT_MS || 30000),
   imageMaxSide: Number(process.env.IMAGE_MAX_SIDE || 1600),
+  quranAudioCacheDir: resolveFromRoot(process.env.QURAN_AUDIO_CACHE_DIR, './data/cache/quran-audio'),
+  quranAudioMaxBytes: Number(process.env.QURAN_AUDIO_MAX_MB || 32) * 1024 * 1024,
+  quranAudioCacheMaxBytes: Number(process.env.QURAN_AUDIO_CACHE_MAX_MB || 256) * 1024 * 1024,
+  quranAudioCacheTtlMs: Number(process.env.QURAN_AUDIO_CACHE_TTL_DAYS || 30) * 24 * 60 * 60 * 1000,
+  quranAudioTimeoutMs: Number(process.env.QURAN_AUDIO_TIMEOUT_MS || 120000),
   // true = semua anggota grup boleh memakai semua perintah (tanpa daftar admin).
   // Set OPEN_ACCESS=false untuk kembali membatasi perintah ke admin terdaftar.
   openAccess: process.env.OPEN_ACCESS !== 'false',
@@ -32,8 +37,6 @@ export const config = {
   messageAppendMaxAgeMs: Number(process.env.MESSAGE_APPEND_MAX_AGE_MS || 2 * 60 * 1000),
   botMaxReconnectAttempts: Number(process.env.BOT_MAX_RECONNECT_ATTEMPTS || 10),
   // Command ber-prefix '.' yang sengaja diizinkan di chat pribadi. Default: tidak ada.
-  menuVideoEnabled: process.env.MENU_VIDEO_ENABLED !== 'false',
-  menuVideoTtlMs: Number(process.env.MENU_VIDEO_TTL_MINUTES || 30) * 60_000,
   weatherLocation: process.env.WEATHER_LOCATION || 'Gunungkidul',
   weatherLat: Number(process.env.WEATHER_LAT || -7.91),
   weatherLon: Number(process.env.WEATHER_LON || 110.58),

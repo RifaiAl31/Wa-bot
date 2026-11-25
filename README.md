@@ -10,7 +10,7 @@ Bot WhatsApp berbasis **Baileys** untuk mengelola dan mengirim pengumuman teks d
 
 ## Fitur
 
-- `.menu` personal dengan mention asli, live clock Asia/Jakarta, cuaca Open-Meteo cache, jumlah fitur/command dinamis, dan 3 fallback angka.
+- `.menu` mengirim kartu ringkasan visual (role, mode, runtime, cuaca, waktu) lalu daftar kategori/command sesuai role; 3 shortcut angka tetap tersedia.
 - Role-based access (ADMIN/USER/VIP), group access control, VIP masa aktif, dan `.rvo` untuk foto biasa yang eksplisit diizinkan.
 - Downloader publik `.tiktok`/`.instagram` modular via `yt-dlp` (opsional) dengan SSRF guard, rate limit, dan batas ukuran.
 
@@ -26,7 +26,7 @@ Bot WhatsApp berbasis **Baileys** untuk mengelola dan mengirim pengumuman teks d
 - **Akses semua perintah** untuk anggota grup; hanya daftar grup yang dibatasi untuk admin.
 - **Mode cepat** `/set <teks>`: teks yang ditempel langsung tersimpan apa adanya tanpa wizard.
 - **Pengiriman manual** `/send A1` (alias `/kirim`), ID lama `ANN-001`/`AN001` tetap diterima setelah migrasi.
-- Generator gambar `.iqc` dan `.tqc`: mockup chat iPhone/TikTok dari teks dan foto, dengan watermark `EDIT / MOCKUP`.
+- Generator Canvas lokal: `.iqc`, `.iqc2`, `.iqc5`, `.iqcdark`, `.iqcpink`, `.iqcpinkv2`, `.iqcmerah`, `.tqc`, `.tiktokchat`, `.wq`, `.iqcwin`, dan `.ytcomment`. Varian warna adalah adaptasi lokal, bukan replika pixel-perfect backend upstream. Mockup Instagram tersedia lewat `.igqc`, `.igpost`, `.igstory`, `.igprofile`, `.igdm`, `.ignote`. Hasil diberi penanda simulasi, bukan screenshot atau komentar asli.
 - AI Assistant lewat OpenRouter menggunakan **model gratis saja**, dengan batas pemakaian dan reaction ⏳→✅/❌.
 - Panel web lengkap: CRUD pengumuman, import PDF/DOCX/TXT/MD menjadi draf teks, kelola jadwal/grup/admin, riwayat, backup.
 - Teks saja yang dikirim ke grup — tidak ada gambar, video, poster, atau lampiran. Dokumen hanya dipakai sebagai sumber teks.

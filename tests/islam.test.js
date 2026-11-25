@@ -1,11 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import fsp from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { testEnv, ADMIN, GROUP } from './helpers.js'
 
 testEnv('islam')
 const { initDb } = await import('../src/db/index.js')
+const { config } = await import('../src/config.js')
 const { handleIslamCommand } = await import('../src/features/islam/index.js')
 initDb({ force: true })
 
@@ -54,12 +57,30 @@ function quranPayload(arabic, translation, n = 1) {
       status: 'OK',
       data: [
         { number: 36, name: 'Ya Sin', numberOfAyahs: 83, ayahs: [{ numberInSurah: n, text: arabic }] },
+        { number: 36, name: 'Ya Sin', numberOfAyahs: 83, ayahs: [{ numberInSurah: n, text: `LATIN-${n}` }] },
         { number: 36, name: 'Ya Sin', numberOfAyahs: 83, ayahs: [{ numberInSurah: n, text: translation }] },
       ],
     },
   }
 }
 
+const audioCacheDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'wabot-quran-audio-'))
+test.after(() => fsp.rm(audioCacheDir, { recursive: true, force: true }))
+
+function mp3Response(buffer, url = 'https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/001.mp3') {
+  return {
+    ok: true,
+    status: 200,
+    url,
+    headers: new Headers({
+      'content-type': 'audio/mpeg',
+      'content-length': String(buffer.length),
+    }),
+    async arrayBuffer() {
+      return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+    },
+  }
+}
 test('.ayat kursi memakai data asli vanXone, tanpa network', async () => {
   const sock = makeSock()
   const fetchFn = fakeFetch()
@@ -91,8 +112,21 @@ test('.ayat 36:1 mengambil Arab + terjemahan dari api.alquran.cloud', async () =
   const text = texts(sock)[0]
   assert.match(text, /YA SIN/)
   assert.ok(text.includes('AR-SIN-1'))
+  assert.ok(text.includes('LATIN-1'))
   assert.ok(text.includes('ID-SIN-1'))
-  assert.equal(fetchFn.calls[0], 'https://api.alquran.cloud/v1/surah/36/editions/quran-uthmani,id.indonesian')
+  assert.equal(fetchFn.calls[0], 'https://api.alquran.cloud/v1/surah/36/editions/quran-uthmani,en.transliteration,id.indonesian')
+})
+
+test('.surah detail menyertakan teks Arab, transliterasi, dan terjemahan', async () => {
+  const sock = makeSock()
+  const fetchFn = fakeFetch({
+    'https://api.alquran.cloud/v1/surah/36/editions/': quranPayload('AR-YASIN-1', 'ID-YASIN-1'),
+  })
+  await handleIslamCommand(makeCtx(sock), 'surah', 'Yasin', { fetchFn })
+  const text = texts(sock)[0]
+  assert.ok(text.includes('AR-YASIN-1'))
+  assert.ok(text.includes('LATIN-1'))
+  assert.ok(text.includes('ID-YASIN-1'))
 })
 
 test('.surah daftar menampilkan 114 surah tanpa network', async () => {
@@ -106,37 +140,135 @@ test('.surah daftar menampilkan 114 surah tanpa network', async () => {
   assert.equal(fetchFn.calls.length, 0)
 })
 
-test('.murottal nomor mengirim audio https dari QuranJSON', async () => {
+test('.murottal mengunduh, memvalidasi, meng-cache, lalu mengirim MP3', async () => {
   const sock = makeSock()
+  const bytes = Buffer.alloc(1403)
+  bytes.write('ID3')
+  bytes[10] = 0xff
+  bytes[11] = 0xfb
+  let audioRequests = 0
   const fetchFn = fakeFetch({
     'https://raw.githubusercontent.com/penggguna/QuranJSON/master/quran.json': {
       data: [{
         number_of_surah: 1, name: 'Al-Fatihah',
         name_translations: { ar: 'الفاتحة', id: 'Pembuka', en: 'The Opening' },
         number_of_ayah: 7, place: 'Mecca',
-        recitation: 'https://cdn.example.com/quran/001.mp3',
+        recitation: 'https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/001.mp3',
       }],
     },
+    'https://download.quranicaudio.com/': () => { audioRequests += 1; return mp3Response(bytes) },
   })
-  await handleIslamCommand(makeCtx(sock), 'murottal', '1', { fetchFn })
+  await handleIslamCommand(makeCtx(sock), 'murottal', '1', { fetchFn, audioCacheDir })
   assert.equal(audios(sock).length, 1)
   const audio = audios(sock)[0]
   assert.equal(audio.jid, GROUP)
-  assert.equal(audio.content.audio.url, 'https://cdn.example.com/quran/001.mp3')
+  assert.deepEqual(audio.content.audio, bytes)
   assert.equal(audio.content.mimetype, 'audio/mpeg')
   assert.match(audio.content.fileName, /Surah_1_Al-Fatihah\.mp3/)
+  assert.match(texts(sock).join('\n'), /Mishari Rashid Al-Afasy/)
+
+  const secondSock = makeSock()
+  await handleIslamCommand(makeCtx(secondSock), 'murottal', '1', { fetchFn, audioCacheDir })
+  assert.equal(audios(secondSock).length, 1)
+  assert.equal(audioRequests, 1, 'pemanggilan kedua menggunakan cache lokal')
 })
 
 test('.murottal menolak URL audio kosong/invalid tanpa mengirim audio', async () => {
   const sock = makeSock()
   const fetchFn = fakeFetch({
     'https://raw.githubusercontent.com/penggguna/QuranJSON/master/quran.json': {
-      data: [{ number_of_surah: 2, name: 'Al-Baqarah', recitation: 'http://cdn.example.com/bad.mp3' }],
+      data: [{ number_of_surah: 2, name: 'Al-Baqarah', recitation: 'http://download.quranicaudio.com/quran/002.mp3' }],
     },
   })
-  await handleIslamCommand(makeCtx(sock), 'murottal', '2', { fetchFn })
+  await handleIslamCommand(makeCtx(sock), 'murottal', '2', { fetchFn, audioCacheDir })
   assert.equal(audios(sock).length, 0)
   assert.match(texts(sock).at(-1), /tidak valid|tidak tersedia/i)
+})
+
+test('.murottal menolak host audio yang tidak diizinkan', async () => {
+  const sock = makeSock()
+  const fetchFn = fakeFetch({
+    'https://raw.githubusercontent.com/penggguna/QuranJSON/master/quran.json': {
+      data: [{ number_of_surah: 36, name: 'Yasin', recitation: 'https://cdn.example.com/yasin.mp3' }],
+    },
+  })
+  await handleIslamCommand(makeCtx(sock), 'murottal', 'Yasin', { fetchFn, audioCacheDir })
+  assert.equal(audios(sock).length, 0)
+  assert.match(texts(sock).at(-1), /tidak valid|tidak tersedia/i)
+})
+
+test('.murottal menolak respons MP3 kosong/tidak valid', async () => {
+  const sock = makeSock()
+  const fetchFn = fakeFetch({
+    'https://raw.githubusercontent.com/penggguna/QuranJSON/master/quran.json': {
+      data: [{
+        number_of_surah: 1, name: 'Al-Fatihah',
+        recitation: 'https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/002.mp3',
+      }],
+    },
+    'https://download.quranicaudio.com/': {
+      ...mp3Response(
+        Buffer.from('not an audio file'),
+        'https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/002.mp3'
+      ),
+      headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '18' }),
+      async arrayBuffer() { return Buffer.from('not an audio file') },
+    },
+  })
+  await handleIslamCommand(makeCtx(sock), 'murottal', '1', { fetchFn, audioCacheDir })
+  assert.equal(audios(sock).length, 0)
+  assert.match(texts(sock).at(-1), /kosong|bukan MP3/i)
+})
+
+test('.murottal menolak audio yang melampaui batas ukuran sebelum dibaca', async () => {
+  const sock = makeSock()
+  const tooLarge = {
+    ...mp3Response(Buffer.alloc(1024)),
+    headers: new Headers({
+      'content-type': 'audio/mpeg',
+      'content-length': String(config.quranAudioMaxBytes + 1),
+    }),
+  }
+  const fetchFn = fakeFetch({
+    'https://raw.githubusercontent.com/penggguna/QuranJSON/master/quran.json': {
+      data: [{
+        number_of_surah: 1, name: 'Al-Fatihah',
+        recitation: 'https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/003.mp3',
+      }],
+    },
+    'https://download.quranicaudio.com/': tooLarge,
+  })
+  await handleIslamCommand(makeCtx(sock), 'murottal', '1', { fetchFn, audioCacheDir })
+  assert.equal(audios(sock).length, 0)
+  assert.match(texts(sock).at(-1), /melebihi batas/i)
+})
+
+test('.doa mengambil data dari endpoint source dan menampilkan Arab, Latin, terjemahan', async () => {
+  const sock = makeSock()
+  const item = {
+    doa: 'Doa sebelum tidur',
+    ayat: 'ARAB-DOA',
+    latin: 'LATIN-DOA',
+    artinya: 'ARTI-DOA',
+  }
+  const fetchFn = fakeFetch({
+    'https://doa-doa-api-ahmadramadhan.fly.dev/api': [item],
+  })
+  await handleIslamCommand(makeCtx(sock), 'doa', 'tidur', { fetchFn })
+  const text = texts(sock)[0]
+  assert.ok(text.includes(item.ayat))
+  assert.ok(text.includes(item.latin))
+  assert.ok(text.includes(item.artinya))
+})
+
+test('.doa menampilkan error eksplisit ketika API gagal atau payload rusak', async () => {
+  const sock = makeSock()
+  const fetchFn = fakeFetch({
+    'https://doa-doa-api-ahmadramadhan.fly.dev/api': { status: 503, message: 'maintenance' },
+  })
+  await handleIslamCommand(makeCtx(sock), 'doa', 'tidur', { fetchFn })
+  assert.match(texts(sock)[0], /belum dapat diakses/i)
+  assert.equal(audios(sock).length, 0)
 })
 
 test('.murottal menolak URL bukan ekstensi audio', async () => {

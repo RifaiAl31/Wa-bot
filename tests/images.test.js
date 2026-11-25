@@ -59,12 +59,12 @@ test('mode raw merender foto asli sebagai gambar utama', async () => {
   }
 })
 
-test('ketiga template merender PNG valid tanpa gambar', async () => {
+test('template quote yang terdaftar merender PNG valid tanpa gambar', async () => {
   for (const [cmd, mode] of Object.entries(QUOTE_MODES)) {
     const png = await mode.render({ text: EMOJI })
     const meta = await sharp(png).metadata()
     assert.equal(meta.format, 'png')
-    assert.ok(meta.width >= 1000 && meta.height >= 1000)
+    assert.ok(meta.width >= 1000 && meta.height >= 900)
     assert.ok(png.length > 3000, `${cmd} menghasilkan gambar nyata`)
   }
 })
@@ -125,6 +125,55 @@ test('.tqc dan .wq memakai mode masing-masing', async () => {
     await handleMessage(ctx(sock, `${cmd} kenapa yahh??`))
     assert.equal(imageCalls(sock).length, 1)
     assert.match(imageCalls(sock)[0].content.caption, new RegExp(name))
+  }
+})
+
+test('.iqc5, .tiktokchat, dan .ytcomment menghasilkan mockup lokal berlabel', async () => {
+  const cases = [
+    ['.iqc5', 'teks iPhone'],
+    ['.iqc2', 'status baterai'],
+    ['.iqcdark', 'tema gelap'],
+    ['.iqcpink', 'tema pink'],
+    ['.iqcpinkv2', 'tema pink kedua'],
+    ['.iqcmerah', 'tema merah'],
+    ['.iqcwin', 'tema Windows'],
+    ['.tiktokchat', 'nama|pesan TikTok'],
+    ['.ytcomment', 'username|komentar YouTube'],
+  ]
+  for (const [cmd, arg] of cases) {
+    const sock = makeSock()
+    await handleMessage(ctx(sock, `${cmd} ${arg}`))
+    assert.equal(imageCalls(sock).length, 1, `${cmd} mengirim satu gambar`)
+    assert.match(imageCalls(sock)[0].content.caption, /MOCKUP|simulasi/i)
+    assert.equal((await sharp(imageCalls(sock)[0].content.image).metadata()).format, 'png')
+  }
+})
+
+test('.ytcomment memakai reply gambar sebagai avatar', async () => {
+  const sock = makeSock()
+  const request = {
+    ...ctx(sock, '.ytcomment Nama|komentar 🤭', { message: imageMessage('.ytcomment Nama|komentar 🤭') }),
+    cmd: '.ytcomment',
+    arg: 'Nama|komentar 🤭',
+  }
+  let downloaded = false
+  await handleQuoteCommand(request, {
+    download: async (target) => {
+      downloaded = target.content.mimetype === 'image/png'
+      return { buffer: source, file: 'avatar.png' }
+    },
+  })
+  assert.ok(downloaded)
+  assert.equal(imageCalls(sock).length, 1)
+  assert.match(imageCalls(sock)[0].content.caption, /YouTube Comment Mockup/)
+})
+
+test('.tiktokchat dan .ytcomment menolak format tanpa username eksplisit', async () => {
+  for (const cmd of ['.tiktokchat', '.ytcomment']) {
+    const sock = makeSock()
+    await handleMessage(ctx(sock, `${cmd} hanya teks`))
+    assert.equal(imageCalls(sock).length, 0)
+    assert.match(texts(sock).join('\n'), new RegExp(`Gunakan format ${cmd}`))
   }
 })
 

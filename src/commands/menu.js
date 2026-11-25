@@ -1,17 +1,12 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import { config } from '../config.js'
-import { logger } from '../logger.js'
+import { createCanvas } from '@napi-rs/canvas'
 import { COMMAND_GROUPS } from './registry.js'
 import { roleOf } from '../services/roleService.js'
 import { featureService } from '../services/featureService.js'
 import { getCurrentWeather } from '../services/weatherService.js'
 import { normalizeJid } from '../config.js'
+import { fillRoundRect, fitText, FONT } from '../images/engine.js'
 
 const menuChoices = new Map()
-const videoSentAt = new Map()
-
-function pad(value) { return String(value).padStart(2, '0') }
 
 export function jakartaClock(date = new Date()) {
   const fmt = new Intl.DateTimeFormat('id-ID', {
@@ -44,14 +39,89 @@ export function visibleCommands(role) {
 
 export function countCommands(role) { return visibleCommands(role).length }
 
-function weatherLines(weather) {
-  if (!weather?.available) return ['│ 🌤️ Cuaca: Weather unavailable']
-  return [
-    `│ 📍 Lokasi: ${weather.location}`,
-    `│ 🌡️ Suhu: ${weather.temperature}°C`,
-    `│ ☁️ Kondisi: ${weather.condition}`,
-    `│ 💧 Kelembapan: ${weather.humidity}%`,
-  ]
+function drawText(ctx, text, x, y, maxWidth, size, color, weight = '400') {
+  const fitted = fitText(ctx, String(text ?? ''), maxWidth, {
+    start: size, min: 18, maxLines: 1, weight,
+  })
+  ctx.fillStyle = color
+  ctx.font = `${weight} ${fitted.size}px ${FONT}`
+  ctx.textAlign = 'left'
+  ctx.fillText(fitted.lines[0] || '', x, y)
+}
+
+function renderMenuCard(menu) {
+  const W = 1080
+  const H = 1420
+  const canvas = createCanvas(W, H)
+  const ctx = canvas.getContext('2d')
+
+  const background = ctx.createLinearGradient(0, 0, W, H)
+  background.addColorStop(0, '#07131c')
+  background.addColorStop(0.55, '#10252e')
+  background.addColorStop(1, '#071820')
+  ctx.fillStyle = background
+  ctx.fillRect(0, 0, W, H)
+
+  const glow = ctx.createRadialGradient(840, 220, 12, 840, 220, 520)
+  glow.addColorStop(0, 'rgba(0, 221, 170, 0.19)')
+  glow.addColorStop(1, 'rgba(0, 221, 170, 0)')
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, W, H)
+
+  fillRoundRect(ctx, 42, 42, 996, 1336, 42, '#101e28')
+  ctx.strokeStyle = 'rgba(139, 191, 194, 0.18)'
+  ctx.lineWidth = 2
+  ctx.stroke()
+
+  ctx.fillStyle = '#42d6ae'
+  ctx.beginPath()
+  ctx.arc(98, 112, 13, 0, Math.PI * 2)
+  ctx.fill()
+  drawText(ctx, 'KAYY ASSISTANT', 132, 124, 590, 45, '#f3f7f8', '700')
+  drawText(ctx, 'WHATSAPP BOT  •  MENU UTAMA', 134, 166, 560, 22, '#9cb2b8', '500')
+
+  fillRoundRect(ctx, 806, 87, 190, 62, 31, menu.online ? '#163b37' : '#45252b')
+  ctx.fillStyle = menu.online ? '#42d6ae' : '#ff8585'
+  ctx.beginPath()
+  ctx.arc(838, 118, 8, 0, Math.PI * 2)
+  ctx.fill()
+  drawText(ctx, menu.online ? 'ONLINE' : 'OFFLINE', 858, 127, 120, 23, '#f2f6f7', '700')
+
+  drawText(ctx, `Halo, ${menu.mention}!`, 92, 250, 880, 39, '#f3f7f8', '700')
+  drawText(ctx, 'Ringkasan akun dan akses bot Anda', 94, 291, 880, 24, '#9cb2b8', '400')
+
+  const stat = (x, y, label, value, accent) => {
+    fillRoundRect(ctx, x, y, 426, 150, 26, '#172832')
+    ctx.fillStyle = accent
+    ctx.fillRect(x + 26, y + 26, 6, 98)
+    drawText(ctx, label, x + 50, y + 58, 330, 21, '#91a8af', '600')
+    drawText(ctx, value, x + 50, y + 106, 340, 34, '#f3f7f8', '700')
+  }
+  stat(92, 340, 'ROLE / AKUN', `${menu.role}  •  ${menu.account}`, '#42d6ae')
+  stat(562, 340, 'MODE CHAT', menu.mode, '#7ab8ff')
+  stat(92, 516, 'FITUR AKTIF', `${menu.features} fitur`, '#ffca70')
+  stat(562, 516, 'COMMAND TERSEDIA', `${menu.commands} command`, '#d69cff')
+
+  fillRoundRect(ctx, 92, 692, 896, 142, 26, '#172832')
+  drawText(ctx, 'RUNTIME BOT', 122, 740, 330, 21, '#91a8af', '600')
+  drawText(ctx, menu.runtime, 122, 789, 560, 33, '#f3f7f8', '700')
+  drawText(ctx, `${menu.clock.time} WIB`, 728, 789, 225, 28, '#42d6ae', '700')
+
+  fillRoundRect(ctx, 92, 860, 896, 198, 26, '#172832')
+  drawText(ctx, 'CUACA', 122, 908, 330, 21, '#91a8af', '600')
+  if (menu.weather?.available) {
+    drawText(ctx, `${menu.weather.location}  •  ${menu.weather.condition}`, 122, 958, 790, 29, '#f3f7f8', '600')
+    drawText(ctx, `${menu.weather.temperature}°C  •  Kelembapan ${menu.weather.humidity}%`, 122, 1010, 790, 25, '#b8c8cc', '400')
+  } else {
+    drawText(ctx, 'Data cuaca belum tersedia', 122, 972, 790, 28, '#b8c8cc', '400')
+  }
+
+  drawText(ctx, menu.dateText, 96, 1112, 880, 25, '#b8c8cc', '500')
+  fillRoundRect(ctx, 92, 1170, 896, 132, 28, '#075c50')
+  drawText(ctx, 'BUKA MENU', 372, 1227, 336, 31, '#ffffff', '700')
+  drawText(ctx, 'Daftar kategori dan command ada di pesan berikutnya', 210, 1270, 660, 21, '#c6f4e9', '500')
+
+  return canvas.toBuffer('image/png')
 }
 
 export async function buildPersonalMenu(ctx) {
@@ -66,37 +136,55 @@ export async function buildPersonalMenu(ctx) {
   const mode = ctx.isGroup ? 'GROUP' : 'PRIVATE'
   const mention = `@${normalizeJid(ctx.adminJid)}`
   const dateText = `${clock.weekday}, ${clock.day} ${MONTHS[clock.month - 1]} ${clock.year}`
+  const runtime = (() => {
+    const total = Math.floor(process.uptime())
+    const days = Math.floor(total / 86400)
+    const hours = Math.floor((total % 86400) / 3600)
+    const minutes = Math.floor((total % 3600) / 60)
+    return days ? `${days} hari ${hours} jam ${minutes} menit` : `${hours} jam ${minutes} menit`
+  })()
+  const commandLines = COMMAND_GROUPS.flatMap((group) => {
+    const items = group.commands.filter((item) =>
+      (!item.admin || role === 'ADMIN') &&
+      (!item.vip || ['ADMIN', 'VIP'].includes(role))
+    )
+    if (!items.length) return []
+    return [
+      '',
+      group.title,
+      ...items.map((item) => {
+        const access = item.admin ? ' (Admin)' : item.vip ? ' (VIP)' : ''
+        return `• ${item.usage} — ${item.desc}${access}`
+      }),
+    ]
+  })
 
   const lines = [
-    '╭━━━「 KAYY ASSISTANT 」━━━╮',
-    '│',
-    `│ 👋 Halo, ${mention}!`,
-    '│ Selamat datang di WhatsApp Bot.',
-    '│',
-    `│ 👤 Status: ${account}`,
-    `│ 🏷️ Role: ${role}`,
-    `│ 🟢 Account: ${account}`,
-    '│',
-    `│ 🤖 Bot: ${online ? 'ONLINE' : 'OFFLINE'}`,
-    `│ ⚙️ Mode: ${mode}`,
-    `│ ✨ Total Features: ${features}`,
-    `│ ⌨️ Commands: ${commands}`,
-    '│',
-    `│ 🕒 Waktu: ${clock.time} WIB`,
-    `│ 📅 ${dateText}`,
-    '│',
-    ...weatherLines(weather),
-    '│',
-    '╰━━━━━━━━━━━━━━━━━━━━━━╯',
+    '📚 *DAFTAR PERINTAH*',
+    'Pilih perintah dari kategori berikut:',
+    ...commandLines,
     '',
-    '1. 📋 Pengumuman  (.list)',
-    '2. 🤖 Tanya AI  (.ask pertanyaan)',
-    '3. 👤 Identitas saya  (.user)',
+    'Shortcut: 1. .list  |  2. .ask  |  3. .user',
+    'Ketik angka shortcut atau command secara langsung.',
     '',
-    'Ketik 1/2/3 atau langsung command.',
     'KAYY ASSISTANT — Powered by Dev RifaiAl',
   ]
-  return { text: lines.join('\n'), mentions: [String(ctx.adminJid)], role, features, commands, weather }
+  return {
+    text: lines.join('\n'),
+    cardCaption: `👋 Halo, ${mention}!\n📚 Daftar kategori dan command dikirim setelah kartu menu ini.`,
+    mentions: [String(ctx.adminJid)],
+    mention,
+    role,
+    features,
+    commands,
+    weather,
+    clock,
+    dateText,
+    runtime,
+    account,
+    online,
+    mode,
+  }
 }
 
 export function setMenuChoices(ctx, choices) {
@@ -118,46 +206,16 @@ export function consumeMenuChoice(ctx, text) {
   return entry.choices[index - 1]
 }
 
-async function sendHeaderMedia(ctx) {
-  if (config.menuVideoEnabled === false) return false
-  const key = `${ctx.jid}|${ctx.adminJid}`
-  const now = Date.now()
-  const previous = videoSentAt.get(key) || 0
-  if (now - previous < Number(config.menuVideoTtlMs || 30 * 60_000)) return false
-
-  const videoPath = path.join(config.root, 'assets', 'menu-background.mp4')
-  const posterPath = path.join(config.root, 'assets', 'menu-poster.png')
-  try {
-    if (fs.existsSync(videoPath)) {
-      await ctx.sock.sendMessage(ctx.jid, {
-        video: fs.readFileSync(videoPath),
-        mimetype: 'video/mp4',
-        caption: 'KAYY ASSISTANT — By Dev RifaiAl',
-      })
-      videoSentAt.set(key, now)
-      return true
-    }
-  } catch (err) {
-    logger.warn(`Gagal mengirim video menu, pakai poster: ${err.message}`)
-  }
-  try {
-    if (fs.existsSync(posterPath)) {
-      await ctx.sock.sendMessage(ctx.jid, {
-        image: fs.readFileSync(posterPath),
-        mimetype: 'image/png',
-        caption: 'KAYY ASSISTANT — By Dev RifaiAl',
-      })
-      videoSentAt.set(key, now)
-      return true
-    }
-  } catch { /* fallback ke teks saja */ }
-  return false
-}
-
 export async function sendPersonalMenu(ctx) {
-  await sendHeaderMedia(ctx)
   const menu = await buildPersonalMenu(ctx)
+  const card = renderMenuCard(menu)
   setMenuChoices(ctx, ['.list', '.ask', '.user'])
+  await ctx.sock.sendMessage(ctx.jid, {
+    image: card,
+    mimetype: 'image/png',
+    caption: menu.cardCaption,
+    mentions: menu.mentions,
+  })
   await ctx.sock.sendMessage(ctx.jid, { text: menu.text, mentions: menu.mentions })
   return menu
 }

@@ -3,7 +3,9 @@
 //         lib/kernel/plugins/search/quran.js (api.alquran.cloud, tanpa API key)
 // Data pilihan dibaca apa adanya dari src/features/islam/data/*.json (extract vanXone).
 import fs from 'node:fs'
+import fsp from 'node:fs/promises'
 import path from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
 import { config } from '../../config.js'
 import { reply } from '../../commands/context.js'
 import { roleOf } from '../../services/roleService.js'
@@ -12,6 +14,7 @@ import { featureService } from '../../services/featureService.js'
 const CREDIT = 'Diadaptasi dari vanXone v7 — × - vanXone </>'
 const API_BASE = 'https://api.alquran.cloud/v1'
 const QURAN_JSON_URL = 'https://raw.githubusercontent.com/penggguna/QuranJSON/master/quran.json'
+const DOA_URL = 'https://doa-doa-api-ahmadramadhan.fly.dev/api'
 const DATA_DIR = path.join(config.root, 'src', 'features', 'islam', 'data')
 
 function loadJson(name) {
@@ -77,8 +80,9 @@ function parseRef(text) {
 }
 
 async function getJson(fetchFn, url) {
-  const res = await fetchFn(url)
+  const res = await fetchFn(url, { signal: AbortSignal.timeout(config.imageTimeoutMs) })
   if (!res) throw new Error('Respons kosong')
+  if (res.ok === false) throw new Error(`Server merespons HTTP ${res.status || 'tidak diketahui'}.`)
   const payload = typeof res.json === 'function' ? await res.json() : (res.data !== undefined ? res.data : res)
   if (payload && payload.status && payload.status !== 'OK') {
     throw new Error(String(payload.message || `status ${payload.status}`))
@@ -87,17 +91,18 @@ async function getJson(fetchFn, url) {
 }
 
 async function fetchAyahs(fetchFn, sur, a, b) {
-  const payload = await getJson(fetchFn, `${API_BASE}/surah/${sur.no}/editions/quran-uthmani,id.indonesian`)
+  const payload = await getJson(fetchFn, `${API_BASE}/surah/${sur.no}/editions/quran-uthmani,en.transliteration,id.indonesian`)
   const editions = payload?.data
-  if (!Array.isArray(editions) || editions.length < 2 || !Array.isArray(editions[0]?.ayahs)) {
+  if (!Array.isArray(editions) || editions.length < 3 || !Array.isArray(editions[0]?.ayahs)) {
     throw new Error('Data ayat tidak valid')
   }
-  const [ar, id] = editions
+  const [ar, latin, id] = editions
   return ar.ayahs
     .filter((x) => x.numberInSurah >= a && x.numberInSurah <= b)
     .map((x) => ({
       n: x.numberInSurah,
       ar: String(x.text || '').replace(/^بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ\s*/, sur.no === 1 ? '$&' : ''),
+      latin: (latin.ayahs.find((y) => y.numberInSurah === x.numberInSurah) || {}).text || '',
       id: (id.ayahs.find((y) => y.numberInSurah === x.numberInSurah) || {}).text || '',
     }))
 }
@@ -165,7 +170,7 @@ async function cmdAyat(ctx, arg, fetchFn) {
     return reply(ctx, [
       `🕌 *QS ${ref.sur.n.toUpperCase()} (${ref.sur.no}) : ${ref.a}${ref.b > ref.a ? '–' + ref.b : ''}*`,
       '━━━━━━━━━━━━━━━━━━━━',
-      ...xs.map((x) => `${x.ar} ﴾${x.n}﴿\n_${x.id}_`),
+      ...xs.map((x) => `${x.ar} ﴾${x.n}﴿\n_${x.latin}_\n_${x.id}_`),
       ref.b < ref.sur.a ? `\n_Lanjut: .ayat ${ref.sur.no} ${ref.b + 1}-${Math.min(ref.b + 10, ref.sur.a)}_` : '',
       '', `💗 ${CREDIT}`,
     ].join('\n'))
@@ -190,7 +195,7 @@ async function cmdSurah(ctx, arg, fetchFn) {
     return reply(ctx, [
       `📜 *${sur.n.toUpperCase()}*`,
       `Surah ke-${sur.no} • ${sur.a} ayat`, '━━━━━━━━━━━━━━━━━━━━',
-      ...xs.map((x) => `${x.ar} ﴾${x.n}﴿\n_${x.id}_`),
+      ...xs.map((x) => `${x.ar} ﴾${x.n}﴿\n_${x.latin}_\n_${x.id}_`),
       '', `_Gunakan .ayat ${sur.no}:1 untuk ayat tertentu_`, '', `💗 ${CREDIT}`,
     ].join('\n'))
   } catch (err) {
@@ -202,15 +207,139 @@ function validAudioUrl(value) {
   if (typeof value !== 'string' || !value.trim()) return null
   try {
     const url = new URL(value.trim())
-    if (url.protocol !== 'https:') return null
-    if (!/\.(mp3|m4a|aac|ogg|wav|webm)$/i.test(url.pathname)) return null
+    if (url.protocol !== 'https:' || url.hostname !== 'download.quranicaudio.com' ||
+        url.username || url.password || url.port) return null
+    if (!/\.mp3$/i.test(url.pathname)) return null
     return url.toString()
   } catch {
     return null
   }
 }
 
-async function cmdMurottal(ctx, arg, fetchFn) {
+function isMpegAudio(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 1024) return false
+  const end = Math.min(buffer.length - 1, 4096)
+  for (let i = 0; i < end; i += 1) {
+    if (buffer[i] === 0xff && (buffer[i + 1] & 0xe0) === 0xe0 &&
+        (buffer[i + 1] & 0x06) !== 0) return true
+  }
+  return false
+}
+
+async function pruneAudioCache(cacheDir, keepFile) {
+  const now = Date.now()
+  const cached = []
+  for (const entry of await fsp.readdir(cacheDir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue
+    const file = path.join(cacheDir, entry.name)
+    const stat = await fsp.stat(file)
+    if (entry.name.endsWith('.tmp')) {
+      if (now - stat.mtimeMs > 60 * 60 * 1000) await fsp.unlink(file)
+      continue
+    }
+    if (!/^[a-f0-9]{64}\.mp3$/i.test(entry.name)) continue
+    if (now - stat.mtimeMs > config.quranAudioCacheTtlMs) {
+      await fsp.unlink(file)
+      continue
+    }
+    cached.push({ file, size: stat.size, mtimeMs: stat.mtimeMs })
+  }
+
+  let total = cached.reduce((sum, item) => sum + item.size, 0)
+  for (const item of cached.sort((a, b) => a.mtimeMs - b.mtimeMs)) {
+    if (total <= config.quranAudioCacheMaxBytes) break
+    if (item.file === keepFile) continue
+    await fsp.unlink(item.file)
+    total -= item.size
+  }
+}
+
+async function readAudioResponse(response, maxBytes) {
+  const declared = Number(response.headers?.get?.('content-length') || 0)
+  if (declared > maxBytes) throw new Error('Ukuran audio melebihi batas cache.')
+
+  const chunks = []
+  let size = 0
+  const addChunk = (chunk) => {
+    const buffer = Buffer.from(chunk)
+    size += buffer.length
+    if (size > maxBytes) throw new Error('Ukuran audio melebihi batas cache.')
+    chunks.push(buffer)
+  }
+
+  if (response.body && typeof response.body[Symbol.asyncIterator] === 'function') {
+    for await (const chunk of response.body) addChunk(chunk)
+  } else if (response.body?.getReader) {
+    const reader = response.body.getReader()
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        addChunk(value)
+      }
+    } finally {
+      reader.releaseLock()
+    }
+  } else if (typeof response.arrayBuffer === 'function') {
+    addChunk(await response.arrayBuffer())
+  } else if (Buffer.isBuffer(response.data)) {
+    addChunk(response.data)
+  } else {
+    throw new Error('Respons audio tidak memiliki data yang dapat dibaca.')
+  }
+  const buffer = Buffer.concat(chunks, size)
+  if (!isMpegAudio(buffer)) throw new Error('Audio yang diunduh kosong atau bukan MP3 yang valid.')
+  return buffer
+}
+
+async function getCachedAudio(url, fetchFn, cacheDir = config.quranAudioCacheDir) {
+  const maxBytes = config.quranAudioMaxBytes
+  const cacheFile = path.join(cacheDir, `${createHash('sha256').update(url).digest('hex')}.mp3`)
+  await fsp.mkdir(cacheDir, { recursive: true, mode: 0o700 })
+  try {
+    const stat = await fsp.stat(cacheFile)
+    if (stat.size > 0 && stat.size <= maxBytes &&
+        Date.now() - stat.mtimeMs <= config.quranAudioCacheTtlMs) {
+      const cached = await fsp.readFile(cacheFile)
+      if (isMpegAudio(cached)) {
+        const now = new Date()
+        await fsp.utimes(cacheFile, now, now)
+        await pruneAudioCache(cacheDir, cacheFile)
+        return cached
+      }
+    }
+    await fsp.unlink(cacheFile)
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err
+  }
+
+  const response = await fetchFn(url, {
+    redirect: 'error',
+    signal: AbortSignal.timeout(config.quranAudioTimeoutMs),
+  })
+  if (!response?.ok) throw new Error(`Server audio merespons HTTP ${response?.status || 'tidak diketahui'}.`)
+  if (response.url && !validAudioUrl(response.url)) {
+    throw new Error('Audio diarahkan ke host yang tidak diizinkan.')
+  }
+  const contentType = response.headers?.get?.('content-type')?.split(';')[0].trim().toLowerCase()
+  if (contentType && !['audio/mpeg', 'audio/mp3', 'application/octet-stream'].includes(contentType)) {
+    throw new Error('Server audio mengirim format yang tidak didukung.')
+  }
+  const buffer = await readAudioResponse(response, maxBytes)
+  const tempFile = `${cacheFile}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    await fsp.writeFile(tempFile, buffer, { flag: 'wx', mode: 0o600 })
+    await fsp.rename(tempFile, cacheFile)
+    await pruneAudioCache(cacheDir, cacheFile)
+  } finally {
+    await fsp.unlink(tempFile).catch((err) => {
+      if (err.code !== 'ENOENT') throw err
+    })
+  }
+  return buffer
+}
+
+async function cmdMurottal(ctx, arg, fetchFn, audioCacheDir) {
   const q = String(arg || '').trim()
   if (!q) {
     return reply(ctx, [
@@ -244,8 +373,12 @@ async function cmdMurottal(ctx, arg, fetchFn) {
       // Jangan pernah mengirim URL kosong/invalid ke WhatsApp.
       return reply(ctx, `❌ Audio murottal untuk surah "${selected.name || q}" tidak tersedia atau URL tidak valid.\n\n💗 ${CREDIT}`)
     }
+    const audio = await getCachedAudio(url, fetchFn, audioCacheDir)
     const no = selected.number_of_surah
     const name = selected.name || ''
+    const reciter = /\/mishaari_raashid_al_3afaasee\//i.test(new URL(url).pathname)
+      ? 'Mishari Rashid Al-Afasy'
+      : 'Tidak tercantum di dataset'
     await reply(ctx, [
       '🎧 *AUDIO MUROTTAL AL-QURAN* 📖', '',
       `• 🔢 *Surah Ke:* ${no} dari 114`,
@@ -253,13 +386,14 @@ async function cmdMurottal(ctx, arg, fetchFn) {
       `• 💡 *Arti Surah:* ${selected.name_translations?.id || selected.name_translations?.en || ''}`,
       `• 🔢 *Jumlah Ayat:* ${selected.number_of_ayah || ''} Ayat`,
       `• 📍 *Tempat Turun:* ${selected.place === 'Mecca' ? 'Makkiyah' : 'Madaniyah'}`,
+      `• 🎙️ *Qari:* ${reciter}`,
       '', '_Mengirimkan audio murottal lengkap..._ 🎙️', '', `💗 ${CREDIT}`,
     ].join('\n'))
     if (!ctx.sock || typeof ctx.sock.sendMessage !== 'function') {
       return reply(ctx, '❌ Soket WhatsApp tidak tersedia untuk mengirim audio.')
     }
     return await ctx.sock.sendMessage(ctx.jid, {
-      audio: { url },
+      audio,
       mimetype: 'audio/mpeg',
       ptt: false,
       fileName: `Surah_${no}_${name.replace(/\s+/g, '_')}.mp3`,
@@ -460,6 +594,54 @@ function cmdIstighfar(ctx) {
   return reply(ctx, ayatCaption('istighfar', AYAT.istighfar))
 }
 
+async function cmdDoa(ctx, arg, fetchFn) {
+  const query = String(arg || '').trim().toLowerCase()
+  if (query.length > 100) return reply(ctx, 'Kata pencarian doa maksimal 100 karakter.')
+  try {
+    const items = await getJson(fetchFn, DOA_URL)
+    if (!Array.isArray(items) || !items.length) throw new Error('Daftar doa tidak valid atau kosong.')
+    const validItems = items.filter((item) =>
+      item && typeof item.doa === 'string' &&
+      typeof item.ayat === 'string' &&
+      typeof item.latin === 'string' &&
+      typeof item.artinya === 'string'
+    )
+    if (!validItems.length) throw new Error('Data doa tidak memiliki format Arab, Latin, dan terjemahan.')
+    if (!query) {
+      return reply(ctx, [
+        '🤲 *DAFTAR DOA HARIAN*',
+        '',
+        ...validItems.map((item, index) => `${index + 1}. ${item.doa.slice(0, 100)}`),
+        '',
+        'Cari detail: .doa <nama doa>',
+        'Contoh: .doa doa sebelum tidur',
+        '',
+        'Catatan: API sumber tidak menyediakan referensi sanad untuk tiap doa.',
+        `💗 ${CREDIT}`,
+      ].join('\n'))
+    }
+    const item = validItems.find((entry) => entry.doa.toLowerCase().includes(query))
+    if (!item) return reply(ctx, `❌ Doa "${arg}" tidak ditemukan.\nKetik .doa untuk melihat daftar.\n\n💗 ${CREDIT}`)
+    return reply(ctx, [
+      `🤲 *${item.doa.slice(0, 120).toUpperCase()}*`,
+      '',
+      '📜 Arab:',
+      item.ayat.slice(0, 3000),
+      '',
+      '🔤 Latin:',
+      item.latin.slice(0, 1500),
+      '',
+      '💡 Artinya:',
+      item.artinya.slice(0, 2000),
+      '',
+      'Catatan: API sumber tidak menyediakan referensi sanad untuk doa ini.',
+      `💗 ${CREDIT}`,
+    ].join('\n'))
+  } catch (err) {
+    return reply(ctx, `❌ Daftar doa belum dapat diakses: ${err.message}`)
+  }
+}
+
 const HELP = [
   '🕌 *MENU ISLAMI*', '',
   '• .ayat [kursi|2:255|36:1]',
@@ -467,6 +649,7 @@ const HELP = [
   '• .murottal [nama|nomor]',
   '• .asmaul [nomor/nama]',
   '• .zikir [pagi|petang|sholat]',
+  '• .doa [kata kunci]',
   '• .istighfar',
   '• .tahlil',
   '• .sholawat [nama]',
@@ -477,7 +660,7 @@ const HELP = [
 /**
  * Router memanggil handleIslamCommand(ctx, cmd, arg).
  * fetchFn opsional (default: global fetch) untuk injeksi tes tanpa network.
- * @param {{ fetchFn?: (url: string) => Promise<any> }} [options]
+ * @param {{ fetchFn?: (url: string) => Promise<any>, audioCacheDir?: string }} [options]
  */
 export async function handleIslamCommand(ctx, cmd, arg = '', options = {}) {
   const fetchFn = typeof options.fetchFn === 'function' ? options.fetchFn : (...args) => fetch(...args)
@@ -500,7 +683,7 @@ export async function handleIslamCommand(ctx, cmd, arg = '', options = {}) {
     case 'murrotal':
     case 'murotal':
     case 'audiosurah':
-      return cmdMurottal(ctx, arg, fetchFn)
+      return cmdMurottal(ctx, arg, fetchFn, options.audioCacheDir)
     case 'asmaul':
     case 'asmaulhusna':
       return cmdAsmaul(ctx, arg)
@@ -517,6 +700,9 @@ export async function handleIslamCommand(ctx, cmd, arg = '', options = {}) {
       return cmdIstighfar(ctx)
     case 'tahlil':
       return cmdTahlil(ctx)
+    case 'doa':
+    case 'berdoa':
+      return cmdDoa(ctx, arg, fetchFn)
     default:
       return reply(ctx, HELP)
   }

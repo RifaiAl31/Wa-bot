@@ -11,7 +11,7 @@ process.env.IMAGE_TEMP_DIR = tempDir
 process.env.FFMPEG = process.env.FFMPEG || 'ffmpeg'
 
 const { setWaDownloader } = await import('../src/services/waMedia.js')
-const { handleStickerCommand, readExifFromWebp, imageToSticker, hasFFmpeg } = await import('../src/features/sticker/index.js')
+const { handleStickerCommand, readExifFromWebp, imageToSticker, hasFFmpeg, runFfmpeg } = await import('../src/features/sticker/index.js')
 
 const JID = '1203630@g.us'
 const png = await sharp({ create: { width: 96, height: 64, channels: 4, background: { r: 220, g: 40, b: 40, alpha: 1 } } }).png().toBuffer()
@@ -111,6 +111,67 @@ test('video lebih dari 20 detik ditolak', async () => {
   assert.equal(stickers(sock).length, 0)
 })
 
+test('.sticker menerima gambar yang direply', async () => {
+  mediaBuffer = png
+  mediaMime = 'image/png'
+  const sock = makeSock()
+  const ctx = makeCtx(sock, '.s', '', { quoted: true })
+  assert.equal(await handleStickerCommand(ctx, '.s', ''), true)
+  assert.ok(isWebp(stickers(sock)[0]))
+})
+
+test('.sticker menolak media yang melewati batas ukuran', async () => {
+  mediaBuffer = png
+  mediaMime = 'image/png'
+  const sock = makeSock()
+  const ctx = makeCtx(sock, '.s', '', { fileLength: 1_000_000_000 })
+  assert.equal(await handleStickerCommand(ctx, '.s', ''), false)
+  assert.ok(textReplies(sock).some((text) => /terlalu besar/i.test(text)))
+  assert.equal(stickers(sock).length, 0)
+})
+
+test('.sticker mengonversi GIF animasi ke WEBP bila FFmpeg tersedia', async (t) => {
+  if (!await hasFFmpeg()) return t.skip('FFmpeg tidak terpasang.')
+  const workDir = await fs.mkdtemp(path.join(root, 'gif-source-'))
+  const input = path.join(workDir, 'source.gif')
+  await runFfmpeg([
+    '-y', '-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=6:duration=1', input,
+  ])
+  mediaBuffer = await fs.readFile(input)
+  mediaMime = 'image/gif'
+  try {
+    const sock = makeSock()
+    assert.equal(await handleStickerCommand(makeCtx(sock, '.sticker', ''), '.sticker', ''), true)
+    const out = stickers(sock)[0]
+    assert.ok(isWebp(out))
+    assert.ok((await sharp(out, { animated: true }).metadata()).pages > 1)
+  } finally {
+    await fs.rm(workDir, { recursive: true, force: true })
+  }
+})
+
+test('.sticker mengonversi video MP4 ke WEBP animasi bila FFmpeg tersedia', async (t) => {
+  if (!await hasFFmpeg()) return t.skip('FFmpeg tidak terpasang.')
+  const workDir = await fs.mkdtemp(path.join(root, 'video-source-'))
+  try {
+    const input = path.join(workDir, 'source.mp4')
+    await runFfmpeg([
+      '-y', '-f', 'lavfi', '-i', 'color=c=red:s=64x64:d=1:r=6',
+      '-an', '-c:v', 'mpeg4', '-pix_fmt', 'yuv420p', input,
+    ])
+    mediaBuffer = await fs.readFile(input)
+    mediaMime = 'video/mp4'
+    const sock = makeSock()
+    const ctx = makeCtx(sock, '.sticker', '', { type: 'videoMessage', seconds: 1 })
+    assert.equal(await handleStickerCommand(ctx, '.sticker', ''), true)
+    const out = stickers(sock)[0]
+    assert.ok(isWebp(out))
+    assert.ok((await sharp(out, { animated: true }).metadata()).pages > 1)
+  } finally {
+    await fs.rm(workDir, { recursive: true, force: true })
+  }
+})
+
 test('.qc, .brat dan .emojimix menghasilkan stiker WEBP', async () => {
   for (const [cmd, arg] of [['.qc', 'Halo dari uji'], ['.brat', 'hijau halo brat'], ['.emojimix', '😂🔥']]) {
     const sock = makeSock()
@@ -127,7 +188,11 @@ test('.attp menghasilkan WEBP (animasi bila ffmpeg ada, statis sebagai fallback)
   assert.ok(isWebp(out[0]))
   const meta = await sharp(out[0], { animated: true }).metadata()
   assert.ok(meta.pages === undefined || meta.pages >= 1)
-  if (await hasFFmpeg()) assert.ok(meta.pages > 1 || isWebp(out[0]))
+  if (await hasFFmpeg()) {
+    assert.ok(meta.pages > 1 || isWebp(out[0]))
+  } else {
+    assert.ok(textReplies(sock).some((text) => /statis/i.test(text)))
+  }
 })
 
 test('.pack menampilkan dan menyimpan metadata', async () => {

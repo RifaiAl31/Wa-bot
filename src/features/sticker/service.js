@@ -484,7 +484,11 @@ export async function cmdAttp(ctx, arg) {
     const color = TTP_COLORS[Math.floor(Math.random() * TTP_COLORS.length)]
     const first = await renderTtp(text, color, 0, 1)
     if (!await hasFFmpeg()) {
-      return sendSticker(ctx, await imageToSticker(first, parseStickerArg('')))
+      const sticker = await sendSticker(ctx, await imageToSticker(first, parseStickerArg('')))
+      await ctx.sock.sendMessage(ctx.jid, {
+        text: 'FFmpeg tidak tersedia; .attp dikirim sebagai stiker statis.',
+      })
+      return sticker
     }
     const pattern = path.join(workDir, 'frame-%03d.png')
     for (let i = 0; i < frames; i += 1) {

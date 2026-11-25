@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import sharp from 'sharp'
 import { testEnv, ADMIN, GROUP } from './helpers.js'
 
 process.env.OPEN_ACCESS = 'false' // aturan baru diuji walau mode tertutup
@@ -10,6 +11,7 @@ testEnv('menu')
 const { groupService } = await import('../src/services/groups.js')
 const { initDb, all, get } = await import('../src/db/index.js')
 const { handleMessage, FLOW_COMMANDS } = await import('../src/commands/router.js')
+const { buildPersonalMenu } = await import('../src/commands/menu.js')
 const { ALL_COMMANDS, RESTRICTED_COMMANDS } = await import('../src/commands/registry.js')
 
 initDb({ force: true })
@@ -32,6 +34,7 @@ const ctx = (sock, text, admin = true) => ({
   text, admin, isGroup:true, messageKey:KEY, message:{ key:KEY },
 })
 const texts = (sock) => sock.sent.filter(s => s.content.text).map(s => s.content.text)
+const images = (sock) => sock.sent.filter(s => Buffer.isBuffer(s.content.image))
 
 test('setiap perintah di /menu benar-benar diimplementasikan', () => {
   const src = fs.readFileSync(path.resolve('src/commands/router.js'), 'utf8')
@@ -45,34 +48,53 @@ test('setiap perintah di /menu benar-benar diimplementasikan', () => {
   ])
 })
 
-test('/menu admin: satu pesan, berisi semua perintah termasuk daftar grup', async () => {
+test('/menu admin: kartu ringkasan diikuti daftar command lengkap', async () => {
   const sock = makeSock()
+  const menu = await buildPersonalMenu(ctx(sock, '/menu', true))
   await handleMessage(ctx(sock, '/menu', true))
-  assert.equal(texts(sock).length, 1, 'menu harus satu pesan')
+  assert.equal(sock.sent.length, 2, 'kartu visual lalu daftar command')
+  assert.equal(images(sock).length, 1)
+  assert.deepEqual(images(sock)[0].content.image.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  const cardMetadata = await sharp(images(sock)[0].content.image).metadata()
+  assert.equal(cardMetadata.format, 'png')
+  assert.equal(cardMetadata.width, 1080)
+  assert.equal(cardMetadata.height, 1420)
+  assert.match(images(sock)[0].content.caption, /Daftar kategori dan command/)
+  assert.equal(texts(sock).length, 1, 'daftar command dikirim satu kali')
   const out = texts(sock).join('\n')
   assert.match(out, /KAYY ASSISTANT/)
-  assert.match(out, /🏷️ Role: ADMIN/)
-  assert.match(out, /✨ Total Features:/)
-  assert.match(out, /⌨️ Commands:/)
-  assert.match(out, /🕒 Waktu: \d{2}:\d{2}:\d{2} WIB/)
-  assert.match(out, /📅 /)
-  assert.match(out, /Weather unavailable|🌡️ Suhu:/)
-  assert.match(out, /Powered by Dev RifaiAl/)
+  assert.match(out, /DAFTAR PERINTAH/)
+  assert.match(out, /• \.igqc\b/)
+  assert.match(out, /• \.igdm\b/)
+  assert.match(out, /• \.iqc\b/)
+  assert.match(out, /• \.iqcpink\b/)
+  assert.match(out, /• \.ytcomment\b/)
+  assert.match(out, /• \/grup .* \(Admin\)/)
+  assert.equal(menu.role, 'ADMIN')
+  assert.ok(menu.features > 0)
+  assert.ok(menu.commands > 0)
+  assert.match(menu.runtime, /\d+ (hari|jam|menit)/)
+  assert.match(menu.clock.time, /^\d{2}:\d{2}:\d{2}$/)
   const numbers = [...out.matchAll(/^(\d+)\. /gm)].map(m => Number(m[1]))
   assert.deepEqual(numbers, numbers.map((_, i) => i + 1), 'nomor urut tanpa duplikat')
   assert.equal(new Set(numbers).size, numbers.length)
   assert.equal(sock.sent.filter(s => s.content.react).length, 0)
 })
 
-test('/menu non-admin: satu pesan, semua perintah kecuali admin', async () => {
+test('/menu non-admin: kartu ringkasan dan daftar tanpa command admin/VIP', async () => {
   const sock = makeSock()
+  const menu = await buildPersonalMenu(ctx(sock, '/menu', false))
   await handleMessage(ctx(sock, '/menu', false))
+  assert.equal(images(sock).length, 1)
   assert.equal(texts(sock).length, 1)
   const out = texts(sock).join('\n')
   assert.match(out, /KAYY ASSISTANT/)
-  assert.match(out, /🏷️ Role: USER/)
-  assert.doesNotMatch(out, /Role: ADMIN/)
+  assert.equal(menu.role, 'USER')
   assert.doesNotMatch(out, /Konfigurasi Admin/)
+  assert.match(out, /DAFTAR PERINTAH/)
+  assert.match(out, /• \.igqc\b/)
+  assert.doesNotMatch(out, /• \/grup\b/)
+  assert.doesNotMatch(out, /• \.tiktok\b/)
 })
 
 test('/menu tidak mengubah database dan tidak mengirim pengumuman', async () => {

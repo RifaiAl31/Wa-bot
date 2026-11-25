@@ -384,6 +384,20 @@ export async function routeCommand(ctx, cmd, arg) {
     case '.iqc':
     case '.tqc':
     case '.wq':
+    case '.iqc5':
+    case '.qc5':
+    case '.iqc2':
+    case '.iqcdark':
+    case '.iqcpink':
+    case '.iqcpinkv2':
+    case '.iqcmerah':
+    case '.iqc-red':
+    case '.rediqc':
+    case '.iqcwin':
+    case '.iqcwindow':
+    case '.tiktokchat':
+    case '.ttchat':
+    case '.ytcomment':
       return handleQuoteCommand({ ...ctx, cmd, arg })
 
     case '/menu':
@@ -452,10 +466,7 @@ export async function routeCommand(ctx, cmd, arg) {
     case '.quotesislam':
     case '.istighfar':
     case '.tahlil':
-    case '.doa':
-      return cmd === '.doa'
-        ? reply(ctx, 'Doa/dzikir tersedia: .istighfar, .tahlil, .zikir pagi|petang|sholat, .sholawat, .asmaul.')
-        : handleIslamCommand(ctx, cmd, arg)
+    case '.doa': return handleIslamCommand(ctx, cmd, arg)
 
     case '.aiwrite':
     case '.rewrite':
