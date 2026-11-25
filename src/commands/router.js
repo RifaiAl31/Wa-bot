@@ -174,6 +174,23 @@ export async function handleMessage(ctx) {
       : text.slice(cmd.length).trim()
     : ''
 
+  const isGroup = ctx.isGroup !== undefined
+    ? Boolean(ctx.isGroup)
+    : /@g\.us$/i.test(String(ctx.jid || ''))
+
+  // Middleware scope: chat pribadi hanya untuk /vip, /cancel, dan command '.'
+  // yang masuk allowlist. Semua pesan lain di chat pribadi diabaikan tanpa balasan.
+  const PRIVATE_ALLOWED = ['/vip', '/cancel']
+  let privatePlainText = false
+  if (!isGroup) {
+    if (isCmd && cmd.startsWith('/') && !PRIVATE_ALLOWED.includes(cmd)) return
+    if (isCmd && cmd.startsWith('.') && !config.privateDotCommands.includes(cmd)) return
+    if (!isCmd) {
+      if (!text) return
+      privatePlainText = true
+    }
+  }
+
   // Semua orang boleh memakai semua perintah, kecuali daftar grup.
   // Gunakan pengecekan admin terdaftar (bukan ctx.admin yang mengikuti OPEN_ACCESS).
   const registeredAdmin = ctx.isRegisteredAdmin !== undefined ? Boolean(ctx.isRegisteredAdmin) : isRegisteredAdmin(ctx.adminJid)
@@ -186,17 +203,10 @@ export async function handleMessage(ctx) {
     return
   }
 
-  const isGroup = ctx.isGroup !== false
-
-  // Chat pribadi hanya dipakai untuk aktivasi VIP; perintah lain tetap di grup.
-  if (!isGroup && isCmd && !['/vip', '/cancel'].includes(cmd)) {
-    await reply(ctx, 'Perintah ini tersedia di grup WhatsApp. Untuk VIP, ketik /vip di chat pribadi ini.')
-    return
-  }
-
-  // Password masuk sebagai pesan biasa di chat pribadi saat sesi aktif.
-  if (!isGroup && !isCmd && text) {
-    await handlePrivateVipPassword(ctx, text)
+  // Password VIP hanya diproses bila memang ada sesi aktif. Tanpa sesi,
+  // percakapan biasa ("Halo", "Apa kabar?") benar-benar diabaikan.
+  if (privatePlainText) {
+    if (vipSession.getSession(ctx.adminJid)) await handlePrivateVipPassword(ctx, text)
     return
   }
 

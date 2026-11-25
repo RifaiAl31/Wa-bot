@@ -28,6 +28,9 @@ export const config = {
   vipMaxAttempts: Number(process.env.VIP_MAX_ATTEMPTS || 3),
   vipLockMs: Number(process.env.VIP_LOCK_MS || 5 * 60 * 1000),
   messageDedupeTtlMs: Number(process.env.MESSAGE_DEDUPE_TTL_MS || 5 * 60 * 1000),
+  // Command ber-prefix '.' yang sengaja diizinkan di chat pribadi. Default: tidak ada.
+  privateDotCommands: (process.env.PRIVATE_DOT_COMMANDS || '')
+    .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   cooldownNoticeMs: Number(process.env.AI_COOLDOWN_NOTICE_SECONDS || 20) * 1000,
 
   // AI Assistant (OpenRouter). API key TIDAK pernah disimpan di database.

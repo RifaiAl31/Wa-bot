@@ -313,6 +313,18 @@ cp data/backups/<file>.db data/bot.db  # rollback (matikan bot dulu)
 npm start
 ```
 
+## Pemisahan chat pribadi dan grup
+
+Router membedakan `@g.us` (grup) dan `@s.whatsapp.net`/`@lid` (pribadi) sebelum command handler:
+
+- Chat pribadi hanya memproses `/vip`, `/cancel`, dan command `.` yang masuk `PRIVATE_DOT_COMMANDS` (default: kosong).
+- Pesan biasa di chat pribadi diabaikan tanpa balasan.
+- Perintah `/` lain di chat pribadi diabaikan tanpa pesan "command tidak dikenal".
+- Teks pribadi hanya dibaca sebagai password VIP bila ada sesi VIP aktif.
+- Grup mempertahankan seluruh command `/` dan `.` yang sudah ada; pesan tanpa prefix tetap diabaikan kecuali sedang dalam alur wizard/konfirmasi.
+
+Variabel terkait: `PRIVATE_DOT_COMMANDS=` di `.env` (pisahkan dengan koma bila ingin mengizinkan command `.` tertentu di private chat).
+
 ## Template Pengajian Muda-Mudi
 
 Command (semua khusus admin terdaftar):

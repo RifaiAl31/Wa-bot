@@ -105,7 +105,7 @@ test('sesi kedaluwarsa setelah batas waktu', async () => {
   vipSession.expireSession(user)
   const sock = makeSock()
   await handleMessage(ctx(sock, PASSWORD, { isGroup: false, user }))
-  assert.match(texts(sock)[0], /sudah berakhir|Ketik \/vip/)
+  assert.equal(texts(sock).length, 0, 'chat pribadi tanpa sesi aktif diabaikan')
   assert.equal(isVip(user), false)
 })
 
