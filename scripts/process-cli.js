@@ -5,7 +5,7 @@ let result
 switch (action) {
   case 'start-bot': result = pm.startBot(); break
   case 'stop-bot': result = pm.stopBot(); break
-  case 'restart-bot': result = pm.scheduleBotRestart(); break
+  case 'restart-bot': pm.stopBot(); result = pm.startBot(); break
   case 'start-tunnel': result = pm.startTunnel(); break
   case 'stop-tunnel': result = pm.stopTunnel(); break
   case 'restart-tunnel': result = pm.restartTunnel(); break
