@@ -313,6 +313,43 @@ cp data/backups/<file>.db data/bot.db  # rollback (matikan bot dulu)
 npm start
 ```
 
+## Template Pengajian Muda-Mudi
+
+Command (semua khusus admin terdaftar):
+
+```
+/template ngaji   Melihat template
+/setngaji         Menyiapkan template awal (tambah "baru" untuk reset)
+/editngaji        Mengedit bagian tertentu (nama, tanggal, waktu, lokasi, peserta, materi)
+/previewngaji     Preview tanpa mengirim
+/sendngaji        Preview + konfirmasi (/ya) lalu kirim sekarang
+/jadwalngaji      Melihat jadwal berikutnya
+/aturngaji        Mengatur jadwal (mingguan / tanggal khusus)
+/aktifngaji       Aktifkan pengiriman otomatis
+/nonaktifngaji    Nonaktifkan pengiriman otomatis
+```
+
+Pesan dikirim persis sebagai teks:
+
+```
+*PENGUMUMAN*
+
+📌 *Pengajian Muda-Mudi*
+📅 : Sabtu 21 November 2026
+🕰️ : Bada 18.20 - selesai
+🕌 : Torikunnajjah
+👤 : Praremaja dan Remaja
+📗 : Makna Hadist
+
+Kerjakan karena Alloh semoga Alloh paring aman, selamat, lancar, sehat, kuat dan barokah.
+
+اَلْحَمْدُلِلّهِ جَزَاكُمُ اللّهُ خَيْرَا
+```
+
+Tanggal dihitung dari jadwal kegiatan (timezone `Asia/Jakarta`), bukan tanggal pengiriman. Mode mingguan otomatis maju ke hari yang sama berikutnya; mode tanggal khusus berhenti setelah terkirim sampai admin mengatur tanggal baru. Pengiriman otomatis terjadi `send_lead_days` hari sebelum kegiatan pada `send_time`. Satu kegiatan hanya dikirim sekali (`ngaji_deliveries` UNIQUE).
+
+Data tersimpan di tabel `ngaji_templates`, `ngaji_schedules`, `ngaji_targets`, dan `ngaji_deliveries` (dibuat otomatis oleh `initDb`, database lama tidak dihapus).
+
 ## PDF Reader, Image Analysis, dan pilihan cepat
 
 - `.pdf` — kirim PDF dengan caption `.pdf`, atau reply pesan PDF dengan `.pdf`. Teksdiekrak per halaman, lalu AI merangkum/menjawab pertanyaan. `AI_PDF_MAX_PAGES` dan `AI_PDF_MAX_CHARS` membatasi dokumen. PDF tanpa teks dicoba lewat model vision gratis; hasilnya tergantung kemampuan model, bukan OCR khusus.

@@ -3,6 +3,7 @@ import { all, get, run, getSetting } from '../db/index.js'
 import { config } from '../config.js'
 import { logger } from '../logger.js'
 import { deliverAnnouncement } from './delivery.js'
+import { processNgaji } from './ngajiService.js'
 
 const WEEKDAY_MAP = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
 
@@ -70,6 +71,16 @@ export class Scheduler {
         this.lastTick.offline = true
         return this.lastTick
       }
+      try {
+        const ngajiResult = await processNgaji(sock, now)
+        this.lastTick.ngaji = ngajiResult
+        if (!ngajiResult.ok && ngajiResult.processed) this.lastTick.failed += 1
+      } catch (err) {
+        this.lastTick.failed += 1
+        this.lastError = `ngaji: ${err.message}`
+        logger.error('Scheduler pengajian gagal:', err.message)
+      }
+
       for (const s of this.dueSchedules(now)) {
         try {
           if (!this.claim(s, now)) { this.lastTick.skipped += 1; continue }

@@ -1,5 +1,8 @@
 // Satu sumber kebenaran daftar command. Dipakai /menu, /help, dan tes.
-export const RESTRICTED_COMMANDS = ['/grup', '/grupaktif']
+export const RESTRICTED_COMMANDS = [
+  '/grup', '/grupaktif', '/template', '/setngaji', '/editngaji', '/previewngaji',
+  '/sendngaji', '/jadwalngaji', '/aturngaji', '/aktifngaji', '/nonaktifngaji',
+]
 
 const c = (cmd, usage, desc, extra = {}) => ({ cmd, usage, desc, ...extra })
 
@@ -60,6 +63,20 @@ export const COMMAND_GROUPS = [
       c('/free', '/free', 'Alias /models.'),
       c('/model', '/model', 'Melihat model aktif.'),
       c('/model', '/model NOMOR', 'Mengganti model AI.', { admin: true }),
+    ],
+  },
+  {
+    title: '📚 *PENGAJIAN MUDA-MUDI*',
+    commands: [
+      c('/template', '/template ngaji', 'Melihat template pengajian.', { admin: true }),
+      c('/setngaji', '/setngaji', 'Menyiapkan template pengajian.', { admin: true }),
+      c('/editngaji', '/editngaji', 'Mengedit data template.', { admin: true }),
+      c('/previewngaji', '/previewngaji', 'Melihat preview pesan.', { admin: true }),
+      c('/sendngaji', '/sendngaji', 'Mengirim pengumuman sekarang.', { admin: true }),
+      c('/jadwalngaji', '/jadwalngaji', 'Melihat jadwal berikutnya.', { admin: true }),
+      c('/aturngaji', '/aturngaji', 'Mengatur jadwal pengajian.', { admin: true }),
+      c('/aktifngaji', '/aktifngaji', 'Mengaktifkan pengiriman otomatis.', { admin: true }),
+      c('/nonaktifngaji', '/nonaktifngaji', 'Menonaktifkan pengiriman otomatis.', { admin: true }),
     ],
   },
   {

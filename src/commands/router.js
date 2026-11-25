@@ -18,6 +18,11 @@ import { runAsk, runImageAnalysis, runPdfAnalysis, handleQuickChoice, handlePdfQ
 import { isRegisteredAdmin } from '../services/adminAuth.js'
 import { verifyVipPassword, registerVip, listVips, isVip, removeVip } from '../services/vipService.js'
 import * as vipSession from '../services/vipSession.js'
+import {
+  handleNgajiFlow, showTemplate as ngajiShowTemplate, setNgaji as ngajiSet,
+  previewNgaji, sendNgajiCommand, jadwalNgaji, setActiveNgaji,
+  startEditNgaji, startScheduleNgaji,
+} from './ngaji.js'
 import { groupService } from '../services/groups.js'
 import { logActivity } from '../db/index.js'
 import { config, normalizeJid } from '../config.js'
@@ -73,6 +78,8 @@ Status /send dan /kirim memakai reaction pada pesan perintah: ⏳ → ✅ / ❌.
 /model, /model NOMOR  Lihat/ganti model (ganti: admin).
 Daftar grup (/grup, /grupaktif) hanya untuk admin.
 Contoh cepat: /set <tempel teks pengumuman> lalu /send A1`
+
+function cleanInputNgaji(value) { return String(value ?? '').trim() }
 
 function findId(arg) { return normalizeId(arg) }
 
@@ -172,7 +179,10 @@ export async function handleMessage(ctx) {
   const registeredAdmin = ctx.isRegisteredAdmin !== undefined ? Boolean(ctx.isRegisteredAdmin) : isRegisteredAdmin(ctx.adminJid)
   if (!registeredAdmin && isCmd && RESTRICTED_COMMANDS.includes(cmd)) {
     logActivity(ctx.adminJid, 'unauthorized_command', text.slice(0, 120), ctx.jid)
-    await reply(ctx, 'Daftar grup (/grup dan /grupaktif) hanya dapat dilihat admin terdaftar.')
+    const message = ['/grup', '/grupaktif'].includes(cmd)
+      ? 'Daftar grup (/grup dan /grupaktif) hanya dapat dilihat admin terdaftar.'
+      : `Perintah ${cmd} hanya untuk admin terdaftar.`
+    await reply(ctx, message)
     return
   }
 
@@ -193,6 +203,8 @@ export async function handleMessage(ctx) {
   const choice = handleChoice(ctx, text)
   if (choice) { await handleQuickChoice(ctx, choice); return }
   if (await handlePdfQuestion(ctx, text)) return
+
+  if (await handleNgajiFlow(ctx, cmd, arg)) return
 
   const flow = getFlow(ctx)
   if (flow && (FLOW_COMMANDS.has(cmd) || !isCmd)) {
@@ -506,6 +518,19 @@ async function routeCommand(ctx, cmd, arg) {
       groupService.setRegistered(g.jid, register)
       return reply(ctx, `${groupLabel(g)} sekarang ${register ? 'TERDAFTAR' : 'TIDAK terdaftar'} sebagai tujuan pengumuman.`)
     }
+
+    case '/template':
+      if (cleanInputNgaji(arg).toLowerCase() !== 'ngaji') return reply(ctx, 'Contoh: /template ngaji')
+      return ngajiShowTemplate(ctx)
+
+    case '/setngaji': return ngajiSet(ctx, arg)
+    case '/editngaji': return startEditNgaji(ctx)
+    case '/previewngaji': return previewNgaji(ctx)
+    case '/sendngaji': return sendNgajiCommand(ctx)
+    case '/jadwalngaji': return jadwalNgaji(ctx)
+    case '/aturngaji': return startScheduleNgaji(ctx)
+    case '/aktifngaji': return setActiveNgaji(ctx, true)
+    case '/nonaktifngaji': return setActiveNgaji(ctx, false)
 
     case '/status': {
       const s = ctx.bot?.status?.() || { connected: false }

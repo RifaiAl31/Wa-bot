@@ -160,6 +160,53 @@ CREATE TABLE IF NOT EXISTS vip_users (
   created_at TEXT NOT NULL
 );
 
+-- Template pengumuman Pengajian Muda-Mudi (baris tunggal).
+CREATE TABLE IF NOT EXISTS ngaji_templates (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  name TEXT NOT NULL,
+  hari TEXT NOT NULL,
+  tanggal INTEGER NOT NULL,
+  bulan TEXT NOT NULL,
+  tahun INTEGER NOT NULL,
+  waktu TEXT NOT NULL,
+  lokasi TEXT NOT NULL,
+  peserta TEXT NOT NULL,
+  materi TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- Jadwal kegiatan dan jadwal pengiriman pengumuman.
+CREATE TABLE IF NOT EXISTS ngaji_schedules (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  mode TEXT NOT NULL DEFAULT 'specific',
+  weekday INTEGER,
+  anchor_date TEXT NOT NULL,
+  event_time TEXT NOT NULL,
+  send_lead_days INTEGER NOT NULL DEFAULT 1,
+  send_time TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ngaji_targets (
+  schedule_id INTEGER NOT NULL,
+  group_jid TEXT NOT NULL,
+  PRIMARY KEY (schedule_id, group_jid)
+);
+
+CREATE TABLE IF NOT EXISTS ngaji_deliveries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  schedule_id INTEGER NOT NULL,
+  event_date TEXT NOT NULL,
+  status TEXT NOT NULL,
+  message TEXT,
+  error TEXT,
+  result TEXT,
+  sent_at TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE (schedule_id, event_date)
+);
+
 -- Sesi aktivasi VIP persisten. Ditulis dengan primary key angka agar group JID/LID
 -- dan private chat JID bisa dipetakan ke identitas yang sama setelah divalidasi.
 CREATE TABLE IF NOT EXISTS deployment_history (

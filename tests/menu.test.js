@@ -36,7 +36,10 @@ test('setiap perintah di /menu benar-benar diimplementasikan', () => {
     const implemented = src.includes(`case '${cmd}':`) || FLOW_COMMANDS.has(cmd)
     assert.ok(implemented, `${cmd} terdaftar di menu tetapi tidak diimplementasikan`)
   }
-  assert.deepEqual(RESTRICTED_COMMANDS, ['/grup', '/grupaktif'])
+  assert.deepEqual(RESTRICTED_COMMANDS, [
+    '/grup', '/grupaktif', '/template', '/setngaji', '/editngaji', '/previewngaji',
+    '/sendngaji', '/jadwalngaji', '/aturngaji', '/aktifngaji', '/nonaktifngaji',
+  ])
 })
 
 test('/menu admin: satu pesan, berisi semua perintah termasuk daftar grup', async () => {
@@ -65,7 +68,7 @@ test('/menu non-admin: satu pesan, semua perintah kecuali admin', async () => {
   assert.match(out, /`\/set`/)
   assert.match(out, /`\/send A1`/)
   assert.match(out, /`\/menu`/)
-  assert.doesNotMatch(out, /`\/grup`|`\/grupaktif`|`\/no vip @user`/)
+  assert.doesNotMatch(out, /`\/grup`|`\/grupaktif`|`\/no vip @user`|`\/setngaji`|`\/sendngaji`/)
   assert.match(out, /khusus admin/)
 })
 
@@ -102,4 +105,7 @@ test('non-admin boleh /set, tapi /grup dan /grupaktif ditolak', async () => {
     assert.equal(texts(sock).length, 1)
     assert.match(texts(sock)[0], /daftar grup .* hanya dapat dilihat admin/i)
   }
+  const ngaji = makeSock()
+  await handleMessage(ctx(ngaji, '/setngaji', false))
+  assert.match(texts(ngaji)[0], /hanya untuk admin terdaftar/i)
 })
