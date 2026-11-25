@@ -5,8 +5,10 @@ import { testEnv, GROUP } from './helpers.js'
 testEnv('migration')
 const { initDb, getDb, get } = await import('../src/db/index.js')
 const { migrateAnnouncementIds } = await import('../src/db/migrateIds.js')
-import { createAnnouncement, getAnnouncement } from '../src/services/announcements.js'
-import { groupService } from '../src/services/groups.js'
+// Import dinamis WAJIB setelah testEnv(): import statis di-hoist dan membuat
+// config.dbPath terisi DB produksi sebelum env test dipasang.
+const { createAnnouncement, getAnnouncement } = await import('../src/services/announcements.js')
+const { groupService } = await import('../src/services/groups.js')
 
 initDb({ force: true })
 groupService.upsert(GROUP, 'Grup Migrasi', 3)

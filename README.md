@@ -298,6 +298,12 @@ Aktivasi VIP dilakukan lewat **private chat** dengan bot agar sandi tidak terlih
 - **Admin terdaftar** (`ADMIN_NUMBERS` / tabel `admins`) bebas kuota dan cooldown AI.
 - **User biasa dan VIP** dibatasi `AI_MAX_PER_USER` (default 5) pertanyaan per `AI_WINDOW_MINUTES` (default 60 menit), dengan cooldown `AI_COOLDOWN_SECONDS`. VIP saat ini berfungsi sebagai penanda/user terdaftar; kuotanya tetap seperti user biasa.
 
+## Keamanan database saat Testing
+
+`tests/migration.test.js` dahulu memakai import statis dari `src/services/*` sebelum `testEnv()` dipanggil. Karena ESM import di-hoist, `config.dbPath` sempat terisi path database produksi sehingga `npm test` bisa menimpa data grup produksi dengan grup uji `Grup Migrasi`. Sekarang semua import modul source dilakukan dinamis **setelah** `testEnv()`.
+
+Jika database produksi pernah tertimpa, pulihkan dari backup di `data/backups/` (mis. `bot-2026-11-25T04-26-34-871Z.db`), lalu jalankan `npm run init-db` untuk memastikan tabel baru tetap ada.
+
 ## Stabilitas koneksi Baileys / Bad MAC
 
 `Bad MAC` dan `MessageCounterError` dari libsignal hampir selalu menandakan satu akun WhatsApp dibuka oleh lebih dari satu socket/proses yang menulis folder auth yang sama. Penanganan di bot:
