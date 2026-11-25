@@ -78,4 +78,40 @@ export const aiService = {
       text: `🤖 *JAWABAN AI*\n\n${answer}\n\nModel: ${model.name} (Free)`,
     }
   },
+
+  // Fitur AI turunan (.aiwrite, .rewrite, .fixcode, ...) memakai kuota yang
+  // SAMA dengan /ask dan provider/model yang sudah dikonfigurasi.
+  async askWithPrompt(ctx, { prompt = '', label = 'AI', command = '.ai' } = {}) {
+    const userJid = ctx?.adminJid || ''
+    const groupJid = ctx?.jid || ''
+    const limit = checkLimits(userJid, groupJid)
+    if (!limit.ok) {
+      recordUsage({ userJid, groupJid, command, status: 'blocked', reason: limit.reason, windowStart: limit.windowStart })
+      const silent = limit.kind === 'cooldown' && !shouldNotifyCooldown(userJid, command)
+      return { ok: false, message: silent ? null : limit.reason, silent }
+    }
+    const text = String(prompt || '').trim()
+    if (!text) return { ok: false, message: 'Teks tidak boleh kosong.' }
+    if (text.length > config.aiMaxQuestionChars) {
+      return { ok: false, message: `Teks terlalu panjang. Maksimal ${config.aiMaxQuestionChars} karakter.` }
+    }
+    let model
+    try { model = await this.currentModel('text', { vip: false }) }
+    catch (err) { return { ok: false, message: err.message || 'Layanan AI tidak tersedia.' } }
+    if (!model) return { ok: false, message: 'Layanan AI tidak tersedia: belum ada model gratis.' }
+
+    let answer
+    try { answer = await askModel({ modelId: model.id, question: text }) }
+    catch (err) {
+      recordUsage({ userJid, groupJid, command, modelId: model.id, status: 'failed',
+        reason: err.message, promptChars: text.length, windowStart: limit.windowStart })
+      return { ok: false, message: err.message || 'Layanan AI sedang tidak tersedia.' }
+    }
+    recordUsage({ userJid, groupJid, command, modelId: model.id, status: 'success',
+      promptChars: text.length, responseChars: answer.length, windowStart: limit.windowStart })
+    return {
+      ok: true, model, answer,
+      text: [`✨ *${label}*`, '', answer, '', `Model: ${model.name} (Free)`, 'KAYY ASSISTANT — By Dev RifaiAl'].join('\n'),
+    }
+  },
 }

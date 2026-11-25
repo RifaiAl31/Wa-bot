@@ -32,6 +32,11 @@ import { roleOf, isAdminRole } from '../services/roleService.js'
 import { featureService } from '../services/featureService.js'
 import { rvoCommand } from './rvo.js'
 import { downloaderCommand } from '../downloaders/index.js'
+import { handleMakerCommand } from '../features/maker/index.js'
+import { handleIslamCommand } from '../features/islam/index.js'
+import { handleWritingCommand } from '../features/ai/writing.js'
+import { handleStickerCommand } from '../features/sticker/index.js'
+import { handleIgCommand } from '../features/ig/index.js'
 import {
   dayName, weekName, timeName, groupLabel, shortJid, normalizeId,
   formatAnnouncementDetail, DAY_CHOICES,
@@ -429,7 +434,66 @@ export async function routeCommand(ctx, cmd, arg) {
       ].join('\n'))
     }
 
+    case '.ayat':
+    case '.ayatpilihan':
+    case '.surah':
+    case '.alquran':
+    case '.quran':
+    case '.murottal':
+    case '.murrotal':
+    case '.murotal':
+    case '.audiosurah':
+    case '.asmaul':
+    case '.asmaulhusna':
+    case '.zikir':
+    case '.dzikir':
+    case '.sholawat':
+    case '.shalawat':
+    case '.quotesislam':
+    case '.istighfar':
+    case '.tahlil':
+    case '.doa':
+      return cmd === '.doa'
+        ? reply(ctx, 'Doa/dzikir tersedia: .istighfar, .tahlil, .zikir pagi|petang|sholat, .sholawat, .asmaul.')
+        : handleIslamCommand(ctx, cmd, arg)
+
+    case '.aiwrite':
+    case '.rewrite':
+    case '.ringkas':
+    case '.fixcode':
+    case '.explaincode':
+    case '.debug': return handleWritingCommand(ctx, cmd, arg)
+
+    case '.igqc':
+    case '.igpost':
+    case '.igstory':
+    case '.igprofile':
+    case '.igdm':
+    case '.ignote': return handleIgCommand(ctx, cmd, arg)
+
+    case '.sticker':
+    case '.s':
+    case '.stiker':
+    case '.ttp':
+    case '.attp':
+    case '.qc':
+    case '.brat':
+    case '.bratblack':
+    case '.bratgreen':
+    case '.emojimix':
+    case '.toimg':
+    case '.pack': return handleStickerCommand(ctx, cmd, arg)
+
     case '.rvo': return rvoCommand(ctx, arg)
+    case '.logo3d':
+    case '.logogold':
+    case '.sologo': return handleMakerCommand(ctx, cmd, arg)
+    case '.aiedit':
+    case '.aifilter':
+    case '.toanime':
+    case '.tocartoon':
+    case '.toreal':
+      return reply(ctx, `${cmd} belum tersedia: mengubah piksel gambar memerlukan image-editing API yang tidak dikonfigurasi di bot ini. Fitur yang tersedia: .img (analisis), .iqc/.tqc/.wq (quote), .rvo (foto biasa). KAYY ASSISTANT — By Dev RifaiAl`)
     case '.tiktok':
     case '.instagram': return downloaderCommand(ctx, cmd, arg)
 

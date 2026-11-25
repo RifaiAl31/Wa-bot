@@ -13,7 +13,12 @@ export const FEATURES = Object.freeze({
   vip: Object.freeze({ label: 'Manajemen VIP', enabled: true, roles: Object.freeze([ROLES.ADMIN]) }),
   system: Object.freeze({ label: 'Manajemen Sistem', enabled: true, roles: Object.freeze([ROLES.ADMIN]) }),
   rvo: Object.freeze({ label: 'Media Berizin (.rvo)', enabled: true, roles: Object.freeze([...ALL]) }),
-  downloader: Object.freeze({ label: 'Downloader Publik', enabled: true, roles: Object.freeze([ROLES.ADMIN, ROLES.VIP]) })
+  downloader: Object.freeze({ label: 'Downloader Publik', enabled: true, roles: Object.freeze([ROLES.ADMIN, ROLES.VIP]) }),
+  islam: Object.freeze({ label: 'Fitur Islami', enabled: true, roles: Object.freeze([...ALL]) }),
+  sticker: Object.freeze({ label: 'Pembuat Stiker', enabled: true, roles: Object.freeze([...ALL]) }),
+  maker: Object.freeze({ label: 'Pembuat Logo', enabled: true, roles: Object.freeze([...ALL]) }),
+  writing: Object.freeze({ label: 'AI Writing & Coding', enabled: true, roles: Object.freeze([...ALL]) }),
+  ig: Object.freeze({ label: 'Instagram iOS Mockup', enabled: true, roles: Object.freeze([...ALL]) })
 })
 
 const enabledKey = (name) => `feature.${name}`
