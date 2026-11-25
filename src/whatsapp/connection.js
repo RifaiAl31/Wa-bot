@@ -13,6 +13,13 @@ import { groupService } from '../services/groups.js'
 import { isOwnMessage } from './sentCache.js'
 import { shouldProcessMessage } from './messageDedupe.js'
 
+function messageAgeMs(msg) {
+  const raw = Number(msg?.messageTimestamp || 0)
+  if (!raw || Number.isNaN(raw)) return Infinity
+  const sent = raw > 1e12 ? raw : raw * 1000
+  return Date.now() - sent
+}
+
 export class WhatsAppBot {
   constructor({ onMessage } = {}) {
     this.onMessage = onMessage || (() => {})
@@ -29,6 +36,8 @@ export class WhatsAppBot {
     this.connecting = false
     this.connectPromise = null
     this._eventHandlers = null
+    this.reconnectBlocked = false
+    this.messageStats = { received: 0, processed: 0, skipped: 0 }
     this.relinkState = { status: 'idle', message: '', startedAt: null, archivedPath: null, error: null }
   }
 
@@ -38,24 +47,34 @@ export class WhatsAppBot {
   }
 
   // Arsipkan sesi lama ke folder berbeda. Database pengumuman tidak disentuh.
-  archiveAndClearAuth() {
+  archiveAuth() {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-')
     const archiveDir = path.join(config.root, 'data', 'auth-archive', stamp)
     if (fs.existsSync(config.authDir)) {
       fs.mkdirSync(path.dirname(archiveDir), { recursive: true })
       fs.cpSync(config.authDir, archiveDir, { recursive: true, force: true })
     }
+    return archiveDir
+  }
+
+  clearAuth() {
     fs.mkdirSync(config.authDir, { recursive: true })
     for (const file of fs.readdirSync(config.authDir)) {
       const target = path.join(config.authDir, file)
       if (fs.statSync(target).isDirectory()) fs.rmSync(target, { recursive: true, force: true })
       else fs.unlinkSync(target)
     }
+  }
+
+  // Kompatibilitas: arsip + hapus dalam satu langkah (dipakai caller lama).
+  archiveAndClearAuth() {
+    const archiveDir = this.archiveAuth()
+    this.clearAuth()
     return archiveDir
   }
 
-  detachListeners() {
-    const current = this.sock
+  detachListeners(socket = this.sock) {
+    const current = socket
     if (!current?.ev?.removeListener || !this._eventHandlers) return
     for (const [event, handler] of Object.entries(this._eventHandlers)) {
       try { current.ev.removeListener(event, handler) } catch { /* socket sudah mati */ }
@@ -63,21 +82,30 @@ export class WhatsAppBot {
     this._eventHandlers = null
   }
 
-  async endCurrentSocket() {
+  // Tutup socket lama tanpa logout. Dipakai sebelum reconnect agar tidak ada
+  // dua socket yang membaca/menulis credentials yang sama (penyebab Bad MAC).
+  retireCurrentSocket(reason = 'BOT_RECONNECT') {
     const current = this.sock
     this.sock = null
-    this.detachListeners()
+    this.detachListeners(current)
+    if (!current) return null
+    try { current.end?.(new Error(reason)) } catch { /* sudah mati */ }
+    return current
+  }
+
+  async endCurrentSocket() {
+    const current = this.retireCurrentSocket('BOT_ACCOUNT_SWITCH')
     if (!current) return
     try { await current.logout?.() } catch { /* sudah terputus */ }
-    try { current.end?.(new Error('BOT_ACCOUNT_SWITCH')) } catch { /* sudah terputus */ }
   }
 
   // Putuskan akun lama tanpa langsung membuat QR baru.
   async disconnect() {
     if (this.relinking) throw new Error('Proses penggantian nomor sedang berjalan.')
     this.relinking = true
-    const archivedPath = this.archiveAndClearAuth()
+    const archivedPath = this.archiveAuth()
     await this.endCurrentSocket()
+    this.clearAuth()
     this.connection = 'close'
     this.qrDataUrl = null
     this.qrText = null
@@ -95,8 +123,9 @@ export class WhatsAppBot {
     this.relinking = true
     const startedAt = new Date().toISOString()
     try {
-      const archivedPath = this.archiveAndClearAuth()
+      const archivedPath = this.archiveAuth()
       await this.endCurrentSocket()
+      this.clearAuth()
       this.connection = 'close'
       this.qrDataUrl = null
       this.qrText = null
@@ -167,12 +196,13 @@ export class WhatsAppBot {
         syncFullHistory: false,
         generateHighQualityLinkPreview: false,
       })
-      // Socket lama bisa masih hidup setelah putus; lepas listener agar tidak ada
-      // messages.upsert yang diproses dua kali oleh dua instance socket.
-      this.detachListeners()
+      // Pastikan socket lama benar-benar ditutup sebelum socket baru dibuat.
+      // Dua socket aktif pada satu akun = konflik session/libsignal (Bad MAC).
+      this.retireCurrentSocket('BOT_RECONNECT')
       this.sock = sock
       const handlers = {
-        'creds.update': saveCreds,
+        // Hanya socket aktif yang boleh menulis credentials ke disk.
+        'creds.update': () => { if (this.sock === sock) return saveCreds() },
         'connection.update': this.safeHandler((update) => this.onConnectionUpdate(update)),
         'messages.upsert': this.safeHandler((update) => this.onMessagesUpsert(update)),
         'groups.upsert': (groups) => {
@@ -229,6 +259,7 @@ export class WhatsAppBot {
         logger.info('Penggantian nomor bot berhasil')
       }
       this.reconnectAttempts = 0
+      this.reconnectBlocked = false
       this.qrDataUrl = null
       this.qrText = null
       this.lastDisconnect = null
@@ -239,6 +270,8 @@ export class WhatsAppBot {
 
     if (connection === 'close') {
       this.connection = 'close'
+      // Lepas listener socket yang baru saja tutup agar tidak ikut menulis creds.
+      this.detachListeners()
       if (this.relinking) {
         logger.warn('Koneksi lama ditutup untuk penggantian nomor; reconnect otomatis dilewati.')
         return
@@ -265,7 +298,13 @@ export class WhatsAppBot {
   }
 
   scheduleReconnect() {
-    if (this.reconnecting) return
+    if (this.reconnecting || this.reconnectBlocked) return
+    const max = Number(config.botMaxReconnectAttempts) || 0
+    if (max > 0 && this.reconnectAttempts >= max) {
+      this.reconnectBlocked = true
+      logger.error(`Auto-reconnect dihentikan setelah ${this.reconnectAttempts} kegagalan. Jalankan bot manual setelah jaringan pulih.`)
+      return
+    }
     this.reconnecting = true
     this.reconnectAttempts += 1
     const delay = Math.min(30_000, 1000 * (2 ** Math.min(this.reconnectAttempts - 1, 5)))
@@ -277,23 +316,36 @@ export class WhatsAppBot {
   }
 
   async onMessagesUpsert(update) {
-    if (update.type !== 'notify') return
+    // Baileys memakai 'notify' untuk pesan baru. Beberapa versi/keadaan
+    // mengirim pesan baru sebagai 'append' (history sync), jadi ikut diproses
+    // hanya jika masih segar agar pesan lama tidak diulang setelah restart.
+    if (update.type !== 'notify' && update.type !== 'append') return
+    const isAppend = update.type === 'append'
     for (const msg of update.messages || []) {
+      this.messageStats.received += 1
       try {
+        // Pesan yang gagal didekripsi libsignal datang tanpa field `message`.
+        // Phase/error decrypt juga tidak boleh menghentikan handler pesan lain.
+        if (!msg.message || msg.message.protocolMessage) { this.messageStats.skipped += 1; continue }
+        if (isAppend && messageAgeMs(msg) > Number(config.messageAppendMaxAgeMs || 120_000)) {
+          this.messageStats.skipped += 1
+          continue
+        }
         // Pesan yang dikirim akun bot sendiri tidak pernah boleh memicu command.
-        if (msg.key?.fromMe) continue
-        if (!shouldProcessMessage(msg)) continue
+        if (msg.key?.fromMe) { this.messageStats.skipped += 1; continue }
+        if (!shouldProcessMessage(msg)) { this.messageStats.skipped += 1; continue }
         const jid = msg.key?.remoteJid
-        if (!jid || jid === 'status@broadcast' || jid.endsWith('@broadcast')) continue
+        if (!jid || jid === 'status@broadcast' || jid.endsWith('@broadcast')) { this.messageStats.skipped += 1; continue }
         const isGroup = jid.endsWith('@g.us')
-        if (isOwnMessage(msg.key?.id)) continue
+        if (isOwnMessage(msg.key?.id)) { this.messageStats.skipped += 1; continue }
         const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption
-        if (!text) continue
+        if (!text) { this.messageStats.skipped += 1; continue }
         const sender = msg.key?.participant || msg.key?.remoteJid
-        if (!sender) continue
+        if (!sender) { this.messageStats.skipped += 1; continue }
         // Pastikan grup dikenal (misal bot baru masuk).
         if (isGroup && !groupService.get(jid)) groupService.upsert(jid, 'Grup WhatsApp', 0)
 
+        this.messageStats.processed += 1
         await this.onMessage({ sock: this.sock, bot: this, jid, adminJid: sender, text, isGroup, admin: isAdmin(sender), message: msg, messageKey: msg.key, isRegisteredAdmin: isRegisteredAdmin(sender) })
       } catch (err) {
         logger.error('Gagal memproses pesan masuk:', err.message)
@@ -309,6 +361,8 @@ export class WhatsAppBot {
       startedAt: this.startedAt,
       reconnectAttempts: this.reconnectAttempts,
       lastDisconnect: this.lastDisconnect,
+      reconnectBlocked: this.reconnectBlocked,
+      messageStats: { ...this.messageStats },
       offline: !this.isConnected(),
       botNumber: this.botNumber,
       relinkState: this.relinkState,

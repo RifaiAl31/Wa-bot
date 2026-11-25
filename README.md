@@ -298,6 +298,20 @@ Aktivasi VIP dilakukan lewat **private chat** dengan bot agar sandi tidak terlih
 - **Admin terdaftar** (`ADMIN_NUMBERS` / tabel `admins`) bebas kuota dan cooldown AI.
 - **User biasa dan VIP** dibatasi `AI_MAX_PER_USER` (default 5) pertanyaan per `AI_WINDOW_MINUTES` (default 60 menit), dengan cooldown `AI_COOLDOWN_SECONDS`. VIP saat ini berfungsi sebagai penanda/user terdaftar; kuotanya tetap seperti user biasa.
 
+## Stabilitas koneksi Baileys / Bad MAC
+
+`Bad MAC` dan `MessageCounterError` dari libsignal hampir selalu menandakan satu akun WhatsApp dibuka oleh lebih dari satu socket/proses yang menulis folder auth yang sama. Penanganan di bot:
+
+- Hanya satu proses per `DB_PATH` **dan** `AUTH_DIR` (`singleInstance.js`).
+- Socket lama ditutup (`retireCurrentSocket`) sebelum socket baru dibuat saat reconnect.
+- `creds.update` hanya ditulis oleh socket yang sedang aktif.
+- Listener socket lama dilepas segera setelah `connection.update: close`.
+- Pesan tanpa field `message` (decrypt gagal) dan `protocolMessage` (pesan terhapus/revoke) diabaikan, tidak menghentikan handler lain.
+- Pesan `messages.upsert` bertipe `append` juga diproses bila masih segar (`MESSAGE_APPEND_MAX_AGE_MS`, default 2 menit) agar perintah yang masuk lewat history sync tidak terlewat. `GET /api/whatsapp/status` menampilkan `messageStats` (received/processed/skipped) untuk memastikan pesan benar-benar sampai ke bot.
+- Auto-reconnect berhenti setelah `BOT_MAX_RECONNECT_ATTEMPTS` kegagalan berturut-turut (default 10) agar tidak infinite retry.
+
+Jangan menghapus folder `data/auth/` hanya karena melihat Bad MAC. Jika session memang logout/401, bot akan mengarsipkan kredensial lama ke `data/auth-archive/` dan menampilkan QR baru. Data pengumuman, VIP, dan database tidak tersentuh.
+
 ## Anti-duplikat, cooldown, dan sesi VIP
 
 - `messages.upsert` dideduplikasi berdasarkan message ID (`MESSAGE_DEDUPE_TTL_MS`, default 5 menit). Listener socket lama dilepas sebelum socket baru dibuat, dan hanya satu proses per database yang diizinkan (lock PID di `data/bot-*.pid`; `ALLOW_MULTI_INSTANCE=1` hanya untuk verifikasi dengan DB lain).
