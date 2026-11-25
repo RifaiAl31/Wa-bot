@@ -2,7 +2,7 @@ const DAYS = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu']
 const WEEKS = ['Setiap minggu','Minggu ke-1','Minggu ke-2','Minggu ke-3','Minggu ke-4','Minggu ke-5']
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
-const state = { view:'dashboard', auth:null, system:null, deployHistory:[], backups:[], status:null, announcements:[], groups:[], schedules:[], deliveries:[], activity:[], settings:null, aiStatus:null, aiModels:[], aiVisionModels:[], aiUsage:null, whatsapp:null, vips:[] }
+const state = { view:'dashboard', auth:null, app:null, weather:null, system:null, deployHistory:[], backups:[], status:null, announcements:[], groups:[], schedules:[], deliveries:[], activity:[], settings:null, aiStatus:null, aiModels:[], aiVisionModels:[], aiUsage:null, whatsapp:null, vips:[] }
 
 function csrfToken() {
   const match = document.cookie.match(/(?:^|;\s*)wa_csrf=([^;]+)/)
@@ -30,11 +30,13 @@ function toast(msg, bad = false) {
 }
 
 async function loadAll() {
-  const paths = ['/api/auth','/api/status','/api/announcements','/api/groups','/api/schedules','/api/deliveries','/api/activity','/api/settings','/api/ai/status','/api/ai/models','/api/ai/usage','/api/whatsapp/status','/api/vip','/api/ai/vision/models']
+  const paths = ['/api/auth','/api/status','/api/announcements','/api/groups','/api/schedules','/api/deliveries','/api/activity','/api/settings','/api/ai/status','/api/ai/models','/api/ai/usage','/api/whatsapp/status','/api/vip','/api/ai/vision/models','/api/app/info','/api/weather']
   const results = await Promise.all(paths.map(p => api(p).catch(e => ({ __error:e.message }))))
-  const [auth, status, ann, groups, sched, deliv, act, settings, aiStatus, aiModels, aiUsage, whatsapp, vips, aiVision] = results
+  const [auth, status, ann, groups, sched, deliv, act, settings, aiStatus, aiModels, aiUsage, whatsapp, vips, aiVision, appInfo, weather] = results
   if (auth.__error) return
   state.auth = auth; state.status = status
+  state.app = appInfo?.__error ? null : appInfo
+  state.weather = weather?.__error ? null : weather
   state.announcements = ann.announcements || []
   state.groups = groups.groups || []
   state.schedules = sched.schedules || []
@@ -102,7 +104,17 @@ function renderSystem() {
 function renderTopbar() {
   const s = state.status
   const connected = s?.connected
-  $('clock').textContent = new Date().toLocaleTimeString('id-ID')
+  const now = new Date()
+  const clock = new Intl.DateTimeFormat('id-ID', {
+    timeZone:'Asia/Jakarta', hour:'2-digit', minute:'2-digit', second:'2-digit',
+    day:'2-digit', month:'short', year:'numeric', weekday:'short', hour12:false,
+  }).format(now)
+  $('clock').textContent = `${clock} WIB`
+  const w = state.weather
+  $('weatherWidget').textContent = w?.available
+    ? `${w.location} · ${w.temperature}°C · ${w.condition}`
+    : 'Weather unavailable'
+  $('appVersion').textContent = state.app?.version ? `v${state.app.version}` : ''
   $('sideConn').textContent = connected ? '● TERHUBUNG' : '○ TERPUTUS'
   $('sideConn').className = 'pill ' + (connected ? 'ok' : 'bad')
 }
@@ -581,3 +593,4 @@ $('btnLoadLog').addEventListener('click', async () => {
 fillSelects()
 loadAll().catch(e => toast(e.message, true))
 setInterval(() => { if (!document.hidden) loadAll().catch(() => {}) }, 12000)
+setInterval(() => { if (!document.hidden) renderTopbar() }, 1000)

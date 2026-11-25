@@ -5,18 +5,19 @@ import { groupLabel, shortJid } from '../utils/format.js'
 export const groupService = {
   lastSyncError: null,
 
-  upsert(jid, name = null, participants = 0) {
+  upsert(jid, name = null, participants = 0, options = {}) {
     const count = Array.isArray(participants) ? participants.length : Number(participants) || 0
+    const registered = options.registered === false ? 0 : 1
     const now = new Date().toISOString()
     run(`INSERT INTO whatsapp_groups(jid, name, participants, is_registered, is_active, last_seen, created_at, updated_at)
-         VALUES (?,?,?,1,1,?,?,?)
+         VALUES (?,?,?,?,1,?,?,?)
          ON CONFLICT(jid) DO UPDATE SET
            name=COALESCE(excluded.name, whatsapp_groups.name),
            participants=excluded.participants,
            last_seen=excluded.last_seen,
            is_active=1,
            updated_at=excluded.updated_at`,
-      jid, name || null, count, now, now, now)
+      jid, name || null, count, registered, now, now, now)
     this.lastSyncError = null
   },
 
@@ -25,7 +26,7 @@ export const groupService = {
       const groups = await sock.groupFetchAllParticipating()
       let n = 0
       for (const [jid, meta] of Object.entries(groups || {})) {
-        this.upsert(jid, meta.subject || meta.name || shortJid(jid), meta.participants || [])
+        this.upsert(jid, meta.subject || meta.name || shortJid(jid), meta.participants || [], { registered: false })
         n += 1
       }
       logger.info(`Sinkronisasi grup selesai: ${n} grup`)

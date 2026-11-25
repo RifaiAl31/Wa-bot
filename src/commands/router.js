@@ -27,6 +27,11 @@ import { groupService } from '../services/groups.js'
 import { logActivity } from '../db/index.js'
 import { config, normalizeJid } from '../config.js'
 import { logger } from '../logger.js'
+import { sendPersonalMenu, consumeMenuChoice } from './menu.js'
+import { roleOf, isAdminRole } from '../services/roleService.js'
+import { featureService } from '../services/featureService.js'
+import { rvoCommand } from './rvo.js'
+import { downloaderCommand } from '../downloaders/index.js'
 import {
   dayName, weekName, timeName, groupLabel, shortJid, normalizeId,
   formatAnnouncementDetail, DAY_CHOICES,
@@ -180,15 +185,23 @@ export async function handleMessage(ctx) {
 
   // Middleware scope: chat pribadi hanya untuk /vip, /cancel, dan command '.'
   // yang masuk allowlist. Semua pesan lain di chat pribadi diabaikan tanpa balasan.
-  const PRIVATE_ALLOWED = ['/vip', '/cancel']
+  const PRIVATE_ALLOWED = [
+    '/vip', '/cancel', '.vip', '.menu', '.user', '.ping', '.status', '.info',
+  ]
   let privatePlainText = false
   if (!isGroup) {
     if (isCmd && cmd.startsWith('/') && !PRIVATE_ALLOWED.includes(cmd)) return
-    if (isCmd && cmd.startsWith('.') && !config.privateDotCommands.includes(cmd)) return
+    if (isCmd && cmd.startsWith('.') && !PRIVATE_ALLOWED.includes(cmd) && !config.privateDotCommands.includes(cmd)) return
     if (!isCmd) {
       if (!text) return
       privatePlainText = true
     }
+  }
+
+  // Group access control: grup baru/default tanpa izin tidak boleh diproses.
+  if (isGroup) {
+    const registered = groupService.get(ctx.jid)?.is_registered
+    if (!registered) return
   }
 
   // Semua orang boleh memakai semua perintah, kecuali daftar grup.
@@ -210,6 +223,11 @@ export async function handleMessage(ctx) {
     return
   }
 
+  if (!isCmd) {
+    const menuCmd = consumeMenuChoice(ctx, text)
+    if (menuCmd) { await routeCommand(ctx, menuCmd, ''); return }
+  }
+
   const choice = handleChoice(ctx, text)
   if (choice) { await handleQuickChoice(ctx, choice); return }
   if (await handlePdfQuestion(ctx, text)) return
@@ -226,12 +244,13 @@ export async function handleMessage(ctx) {
   // Pesan biasa tanpa sesi aktif diabaikan (bot hanya merespons perintah / alur).
 }
 
-async function routeCommand(ctx, cmd, arg) {
+export async function routeCommand(ctx, cmd, arg) {
   const registeredAdmin = ctx.isRegisteredAdmin !== undefined ? Boolean(ctx.isRegisteredAdmin) : isRegisteredAdmin(ctx.adminJid)
   if (!['/help', '/menu', '/vip'].includes(cmd)) logActivity(ctx.adminJid, `command${cmd}`, arg.slice(0, 120), ctx.jid)
 
   switch (cmd) {
-    case '/vip': {
+    case '/vip':
+    case '.vip': {
       const isGroup = ctx.isGroup !== false
       if (isVip(ctx.adminJid)) {
         return reply(ctx, 'Akun Anda sudah terdaftar sebagai VIP.')
@@ -362,14 +381,57 @@ async function routeCommand(ctx, cmd, arg) {
     case '.wq':
       return handleQuoteCommand({ ...ctx, cmd, arg })
 
-    case '/menu': {
-      const { createContext, buildChoices } = await import('./quickReplies.js')
-      createContext('menu', {}, ctx)
-      return reply(ctx, buildChoices(buildMenuText({ admin: registeredAdmin }),
-        ['📢 Pengumuman', '🤖 AI Assistant', '📄 Dokumen & Gambar']))
+    case '/menu':
+    case '.menu': return sendPersonalMenu(ctx)
+
+    case '/help':
+    case '.help': return reply(ctx, HELP)
+
+    case '.user': {
+      const role = roleOf(ctx.adminJid)
+      const vip = isVip(ctx.adminJid)
+      return reply(ctx, [
+        '👤 *IDENTITAS PENGGUNA*', '',
+        `JID: ${ctx.adminJid}`,
+        `Nomor: ${normalizeJid(ctx.adminJid)}`,
+        `Role: ${role}`,
+        `Status: ${vip ? 'VIP ACTIVE' : 'ACTIVE'}`,
+        `Mode: ${ctx.isGroup ? 'GROUP' : 'PRIVATE'}`,
+        '', 'KAYY ASSISTANT — Powered by Dev RifaiAl',
+      ].join('\n'))
     }
 
-    case '/help': return reply(ctx, HELP)
+    case '.ping': {
+      const started = Date.now()
+      const s = ctx.bot?.status?.() || {}
+      return reply(ctx, [
+        '🏓 *PING MONITORING*', '',
+        `Response time: ${Date.now() - started} ms`,
+        `Bot: ${s.connected ? 'ONLINE' : 'OFFLINE'}`,
+        `WhatsApp: ${s.connected ? 'TERHUBUNG' : 'TERPUTUS'}`,
+        'Server: UP',
+        `Uptime: ${Math.round(process.uptime())} detik`,
+        `Waktu: ${new Date().toLocaleTimeString('id-ID', { timeZone:'Asia/Jakarta', hour12:false })} WIB`,
+        '', 'KAYY ASSISTANT — Powered by Dev RifaiAl',
+      ].join('\n'))
+    }
+
+    case '.info': {
+      const role = roleOf(ctx.adminJid)
+      return reply(ctx, [
+        'ℹ️ *KAYY ASSISTANT*', '',
+        'Powered by Dev RifaiAl',
+        `Versi: ${config.appVersion || '1.0.0'}`,
+        `Fitur aktif (${role}): ${featureService.countActiveFeatures(role)}`,
+        `Role Anda: ${role}`,
+        'Zona waktu: Asia/Jakarta',
+        `Mode: ${ctx.isGroup ? 'GROUP' : 'PRIVATE'}`,
+      ].join('\n'))
+    }
+
+    case '.rvo': return rvoCommand(ctx, arg)
+    case '.tiktok':
+    case '.instagram': return downloaderCommand(ctx, cmd, arg)
 
     case '/id':
       return reply(ctx, `Nomor Anda: ${normalizeJid(ctx.adminJid)}\nID grup ini: ${ctx.jid}\nNama grup: ${groupService.get(ctx.jid)?.name || '-'}\n\nKirim nomor Anda ke pemilik bot untuk didaftarkan sebagai admin.`)
@@ -542,7 +604,8 @@ async function routeCommand(ctx, cmd, arg) {
     case '/aktifngaji': return setActiveNgaji(ctx, true)
     case '/nonaktifngaji': return setActiveNgaji(ctx, false)
 
-    case '/status': {
+    case '/status':
+    case '.status': {
       const s = ctx.bot?.status?.() || { connected: false }
       return reply(ctx, `STATUS BOT\nKoneksi WhatsApp: ${s.connected ? 'TERHUBUNG' : 'TERPUTUS'}\nQR tersedia: ${s.qrAvailable ? 'ya' : 'tidak'}\nPer-coba reconnect: ${s.reconnectAttempts || 0}\nMulai: ${s.startedAt || '-'}`)
     }

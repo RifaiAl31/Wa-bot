@@ -8,6 +8,7 @@ process.env.AI_MAX_PER_USER = '5'
 process.env.VIP_MAX_ATTEMPTS = '3'
 process.env.VIP_LOCK_MS = '300000'
 testEnv('vip')
+const { groupService } = await import('../src/services/groups.js')
 
 const { initDb, get } = await import('../src/db/index.js')
 const { handleMessage } = await import('../src/commands/router.js')
@@ -17,6 +18,7 @@ const vipSession = await import('../src/services/vipSession.js')
 const { createApp } = await import('../src/api/routes.js')
 
 initDb({ force: true })
+groupService.upsert(GROUP, 'Grup Uji', 3)
 let apiServer = null
 const PASSWORD = 'rahasia-vip'
 

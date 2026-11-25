@@ -21,6 +21,9 @@ export function initDb({ dbPath = config.dbPath, force = false } = {}) {
 
   const schema = fs.readFileSync(path.resolve(import.meta.dirname, 'schema.sql'), 'utf8')
   db.exec(schema)
+  // Migrasi ringan: kolom masa aktif VIP. Aman dijalankan berulang.
+  const vipColumns = db.prepare('PRAGMA table_info(vip_users)').all().map((c) => c.name)
+  if (!vipColumns.includes('expires_at')) db.exec('ALTER TABLE vip_users ADD COLUMN expires_at TEXT')
 
   if (force) {
     // Schema dijalankan lebih dulu agar DELETE tidak gagal pada database baru.

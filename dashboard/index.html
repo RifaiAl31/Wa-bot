@@ -3,14 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Panel Bot Pengumuman WhatsApp</title>
+<title>KAYY ASSISTANT — By Dev RifaiAl</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+<video id="bgVideo" autoplay muted loop playsinline poster="/assets/menu-poster.png">
+  <source src="/assets/menu-background.mp4" type="video/mp4">
+</video>
+<div class="bg-overlay" aria-hidden="true"></div>
 
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><span class="brand-mark">WA</span><div><strong>Pengumuman Bot</strong><small>Panel kontrol</small></div></div>
+    <div class="brand"><span class="brand-mark">KA</span><div><strong>KAYY ASSISTANT</strong><small>By Dev RifaiAl</small></div></div>
     <nav id="nav">
       <button class="nav-item active" data-view="dashboard">▦ Ringkasan</button>
       <button class="nav-item" data-view="announcements">✎ Pengumuman</button>
@@ -32,7 +36,9 @@
     <header class="topbar">
       <div><h1 id="pageTitle">Ringkasan</h1><div class="muted" id="pageSubtitle">Pantau koneksi dan pengiriman bot</div></div>
       <div class="topbar-right">
-        <span id="clock" class="muted"></span>
+        <span id="weatherWidget" class="muted tiny">Cuaca: …</span>
+        <span id="clock" class="muted tiny"></span>
+        <span id="appVersion" class="muted tiny"></span>
         <span id="accessPill" class="pill ok">Akses umum</span>
         <button id="btnLogin" class="btn ghost small" hidden>Login admin</button>
       </div>

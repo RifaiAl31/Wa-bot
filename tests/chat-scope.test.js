@@ -88,7 +88,7 @@ test('grup: /ask hi tetap merespons dengan AI', async () => {
 test('grup: /menu tetap tampil', async () => {
   const sock = makeSock()
   await handleMessage(groupCtx(sock, '/menu'))
-  assert.ok(texts(sock).some((t) => /MENU BOT WHATSAPP/.test(t)))
+  assert.ok(texts(sock).some((t) => /KAYY ASSISTANT/.test(t)))
 })
 
 test('grup: pesan biasa tanpa prefix diabaikan', async () => {

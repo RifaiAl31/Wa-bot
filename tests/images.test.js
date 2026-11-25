@@ -5,6 +5,11 @@ import sharp from 'sharp'
 import { testEnv, ADMIN, GROUP } from './helpers.js'
 
 testEnv('images')
+const { initDb } = await import('../src/db/index.js')
+initDb({ force: true })
+const { groupService } = await import('../src/services/groups.js')
+groupService.upsert(GROUP, 'Grup Uji', 3)
+groupService.upsert('628888888888@g.us', 'Grup B', 3)
 const { config } = await import('../src/config.js')
 const { handleMessage } = await import('../src/commands/router.js')
 const { QUOTE_MODES, handleQuoteCommand, parseImageInput, parseTiktokInput } = await import('../src/images/generator.js')

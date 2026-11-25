@@ -28,6 +28,7 @@ process.env.AI_COOLDOWN_SECONDS = '0'
 process.env.AI_TIMEOUT_MS = '5000'
 testEnv('ai-gemini')
 
+const { groupService } = await import('../src/services/groups.js')
 const { initDb } = await import('../src/db/index.js')
 const { aiService } = await import('../src/ai/service.js')
 const { config } = await import('../src/config.js')
@@ -35,6 +36,7 @@ const { handleMessage } = await import('../src/commands/router.js')
 const { createApp } = await import('../src/api/routes.js')
 
 initDb({ force: true })
+groupService.upsert(GROUP, 'Grup Uji', 3)
 
 function makeSock() {
   const sent = []

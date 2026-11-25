@@ -39,6 +39,7 @@ const server = http.createServer(async (req, res) => {
 await new Promise((r) => server.listen(0, r))
 process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${server.address().port}/v1`
 process.env.GEMINI_BASE_URL = `http://127.0.0.1:${server.address().port}/v1beta`
+const { groupService } = await import('../src/services/groups.js')
 
 const { initDb, getDb } = await import('../src/db/index.js')
 const { handleMessage } = await import('../src/commands/router.js')
@@ -49,6 +50,7 @@ const { handleChoice, _contexts } = await import('../src/commands/quickReplies.j
 const modelConfig = await import('../src/ai/modelConfig.js')
 
 initDb({ force: true })
+groupService.upsert(GROUP, 'Grup Uji', 3)
 const db = getDb()
 function setModel(id) {
   db.prepare(`INSERT INTO ai_settings(key,value,updated_at) VALUES ('active_model_id',?,datetime('now'))

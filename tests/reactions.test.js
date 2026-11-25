@@ -18,6 +18,7 @@ const KEY = { id: 'CMD-1', remoteJid: CHAT, participant: ADMIN }
 initDb({ force: true })
 groupService.upsert(GROUP, 'Grup Satu', 3)
 groupService.upsert(GROUP2, 'Grup Dua', 4)
+groupService.upsert(CHAT, 'Grup Perintah', 3)
 const idAll = createAnnouncement({ title:'Semua', body:'Pesan reaction', weekday:0, week:0, time:'08:00', targets:[GROUP, GROUP2] })
 const idOne = createAnnouncement({ title:'Satu', body:'Pesan satu', weekday:0, week:0, time:'08:00', targets:[GROUP] })
 

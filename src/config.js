@@ -12,6 +12,7 @@ function resolveFromRoot(p, fallback) {
 
 export const config = {
   root: ROOT,
+  appVersion: process.env.APP_VERSION || '1.1.0',
   env: process.env.NODE_ENV || 'production',
   port: Number(process.env.PORT || 3000),
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 10),
@@ -31,6 +32,17 @@ export const config = {
   messageAppendMaxAgeMs: Number(process.env.MESSAGE_APPEND_MAX_AGE_MS || 2 * 60 * 1000),
   botMaxReconnectAttempts: Number(process.env.BOT_MAX_RECONNECT_ATTEMPTS || 10),
   // Command ber-prefix '.' yang sengaja diizinkan di chat pribadi. Default: tidak ada.
+  menuVideoEnabled: process.env.MENU_VIDEO_ENABLED !== 'false',
+  menuVideoTtlMs: Number(process.env.MENU_VIDEO_TTL_MINUTES || 30) * 60_000,
+  weatherLocation: process.env.WEATHER_LOCATION || 'Gunungkidul',
+  weatherLat: Number(process.env.WEATHER_LAT || -7.91),
+  weatherLon: Number(process.env.WEATHER_LON || 110.58),
+  weatherBaseUrl: (process.env.WEATHER_BASE_URL || 'https://api.open-meteo.com/v1/forecast').replace(/\/$/, ''),
+  weatherCacheMs: Number(process.env.WEATHER_CACHE_MINUTES || 10) * 60_000,
+  downloaderEnabled: process.env.DOWNLOADER_ENABLED !== 'false',
+  downloaderMaxMb: Number(process.env.DOWNLOADER_MAX_MB || 50),
+  downloaderTimeoutMs: Number(process.env.DOWNLOADER_TIMEOUT_MS || 120000),
+  downloaderRateLimit: Number(process.env.DOWNLOADER_RATE_LIMIT || 5),
   privateDotCommands: (process.env.PRIVATE_DOT_COMMANDS || '')
     .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   cooldownNoticeMs: Number(process.env.AI_COOLDOWN_NOTICE_SECONDS || 20) * 1000,

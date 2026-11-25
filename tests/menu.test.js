@@ -5,12 +5,15 @@ import path from 'node:path'
 import { testEnv, ADMIN, GROUP } from './helpers.js'
 
 process.env.OPEN_ACCESS = 'false' // aturan baru diuji walau mode tertutup
+process.env.WEATHER_BASE_URL = 'http://127.0.0.1:1/forecast'
 testEnv('menu')
+const { groupService } = await import('../src/services/groups.js')
 const { initDb, all, get } = await import('../src/db/index.js')
 const { handleMessage, FLOW_COMMANDS } = await import('../src/commands/router.js')
 const { ALL_COMMANDS, RESTRICTED_COMMANDS } = await import('../src/commands/registry.js')
 
 initDb({ force: true })
+groupService.upsert(GROUP, 'Grup Uji', 3)
 
 const KEY = { id: 'MENU-1', remoteJid: GROUP, participant: ADMIN }
 function makeSock() {
@@ -47,13 +50,14 @@ test('/menu admin: satu pesan, berisi semua perintah termasuk daftar grup', asyn
   await handleMessage(ctx(sock, '/menu', true))
   assert.equal(texts(sock).length, 1, 'menu harus satu pesan')
   const out = texts(sock).join('\n')
-  assert.match(out, /🤖 \*MENU BOT WHATSAPP\*/)
-  assert.match(out, /📄 \*DOKUMEN DAN GAMBAR\*/)
-  assert.match(out, /\.iqc/)
-  assert.match(out, /\.tqc <nama>\|<teks>/)
-  assert.match(out, /\.wq <teks>/)
-  for (const cmd of ALL_COMMANDS) assert.ok(out.includes(cmd), `${cmd} harus ada di menu admin`)
-  assert.ok(out.includes('`/grup`') && out.includes('`/grupaktif`') && out.includes('`/no vip @user`'))
+  assert.match(out, /KAYY ASSISTANT/)
+  assert.match(out, /🏷️ Role: ADMIN/)
+  assert.match(out, /✨ Total Features:/)
+  assert.match(out, /⌨️ Commands:/)
+  assert.match(out, /🕒 Waktu: \d{2}:\d{2}:\d{2} WIB/)
+  assert.match(out, /📅 /)
+  assert.match(out, /Weather unavailable|🌡️ Suhu:/)
+  assert.match(out, /Powered by Dev RifaiAl/)
   const numbers = [...out.matchAll(/^(\d+)\. /gm)].map(m => Number(m[1]))
   assert.deepEqual(numbers, numbers.map((_, i) => i + 1), 'nomor urut tanpa duplikat')
   assert.equal(new Set(numbers).size, numbers.length)
@@ -65,11 +69,10 @@ test('/menu non-admin: satu pesan, semua perintah kecuali admin', async () => {
   await handleMessage(ctx(sock, '/menu', false))
   assert.equal(texts(sock).length, 1)
   const out = texts(sock).join('\n')
-  assert.match(out, /`\/set`/)
-  assert.match(out, /`\/send A1`/)
-  assert.match(out, /`\/menu`/)
-  assert.doesNotMatch(out, /`\/grup`|`\/grupaktif`|`\/no vip @user`|`\/setngaji`|`\/sendngaji`/)
-  assert.match(out, /khusus admin/)
+  assert.match(out, /KAYY ASSISTANT/)
+  assert.match(out, /🏷️ Role: USER/)
+  assert.doesNotMatch(out, /Role: ADMIN/)
+  assert.doesNotMatch(out, /Konfigurasi Admin/)
 })
 
 test('/menu tidak mengubah database dan tidak mengirim pengumuman', async () => {
@@ -89,7 +92,7 @@ test('/menu bisa dipanggil kapan saja tanpa merusak sesi /set', async () => {
   const sock = makeSock()
   await handleMessage(ctx(sock, '/set', true))
   await handleMessage(ctx(sock, '/menu', true))
-  assert.match(texts(sock).join('\n'), /MENU BOT WHATSAPP/)
+  assert.match(texts(sock).join('\n'), /KAYY ASSISTANT/)
   await handleMessage(ctx(sock, 'Judul dari sesi', true))
   assert.match(texts(sock).at(-1), /isi pengumuman/i, 'sesi wizard tetap berjalan')
 })

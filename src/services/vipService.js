@@ -18,17 +18,27 @@ export function verifyVipPassword(password) {
 
 export function isVip(jid) {
   const number = normalizeJid(jid)
-  return Boolean(number && get('SELECT jid FROM vip_users WHERE number = ?', number))
+  if (!number) return false
+  const row = get('SELECT expires_at FROM vip_users WHERE number = ?', number)
+  if (!row) return false
+  if (row.expires_at && Date.parse(row.expires_at) <= Date.now()) {
+    run('DELETE FROM vip_users WHERE number = ?', number)
+    return false
+  }
+  return true
 }
 
-export function registerVip(rawNumber, registeredBy = null) {
+export function registerVip(rawNumber, registeredBy = null, expiresAt = null) {
   const number = normalizeJid(rawNumber)
   if (!number) throw new Error('Nomor VIP tidak valid.')
+  if (expiresAt && Number.isNaN(Date.parse(expiresAt))) throw new Error('Tanggal berlaku VIP tidak valid.')
   const now = new Date().toISOString()
-  run(`INSERT INTO vip_users(jid, number, name, registered_by, created_at)
-       VALUES (?,?,?,?,?)
-       ON CONFLICT(number) DO UPDATE SET registered_by=excluded.registered_by, name=COALESCE(excluded.name, vip_users.name)`,
-    `${number}@s.whatsapp.net`, number, null, registeredBy || null, now)
+  const expiry = expiresAt ? new Date(expiresAt).toISOString() : null
+  run(`INSERT INTO vip_users(jid, number, name, registered_by, created_at, expires_at)
+       VALUES (?,?,?,?,?,?)
+       ON CONFLICT(number) DO UPDATE SET registered_by=excluded.registered_by,
+         name=COALESCE(excluded.name, vip_users.name), expires_at=excluded.expires_at`,
+    `${number}@s.whatsapp.net`, number, null, registeredBy || null, now, expiry)
   logActivity(registeredBy, 'register_vip', number)
   return number
 }
@@ -44,5 +54,14 @@ export function removeVip(jid) {
 }
 
 export function listVips() {
-  return all('SELECT jid, number, name, registered_by, created_at FROM vip_users ORDER BY created_at DESC LIMIT 100')
+  return all('SELECT jid, number, name, registered_by, created_at, expires_at FROM vip_users ORDER BY created_at DESC LIMIT 100')
+}
+
+export function setVipExpiry(jid, expiresAt) {
+  const number = normalizeJid(jid)
+  if (!number) throw new Error('Nomor VIP tidak valid.')
+  const expiry = expiresAt ? new Date(expiresAt) : null
+  if (expiry && Number.isNaN(expiry.getTime())) throw new Error('Tanggal berlaku VIP tidak valid.')
+  run('UPDATE vip_users SET expires_at=? WHERE number=?', expiry ? expiry.toISOString() : null, number)
+  return expiry ? expiry.toISOString() : null
 }

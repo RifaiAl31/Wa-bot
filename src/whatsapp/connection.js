@@ -343,7 +343,7 @@ export class WhatsAppBot {
         const sender = msg.key?.participant || msg.key?.remoteJid
         if (!sender) { this.messageStats.skipped += 1; continue }
         // Pastikan grup dikenal (misal bot baru masuk).
-        if (isGroup && !groupService.get(jid)) groupService.upsert(jid, 'Grup WhatsApp', 0)
+        if (isGroup && !groupService.get(jid)) groupService.upsert(jid, 'Grup WhatsApp', 0, { registered: false })
 
         this.messageStats.processed += 1
         await this.onMessage({ sock: this.sock, bot: this, jid, adminJid: sender, text, isGroup, admin: isAdmin(sender), message: msg, messageKey: msg.key, isRegisteredAdmin: isRegisteredAdmin(sender) })

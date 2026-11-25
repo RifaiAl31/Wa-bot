@@ -24,7 +24,7 @@ test('endpoint health/status/groups/announcements/deliveries merespons', async (
   const status = await (await fetch(base + '/api/status')).json()
   assert.match(status.integration, /tidak resmi/)
   const html = await (await fetch(base)).text()
-  assert.match(html, /Bot Pengumuman WhatsApp/)
+  assert.match(html, /KAYY ASSISTANT|Bot Pengumuman WhatsApp/)
 })
 
 test('QR 404 saat tidak ada QR, endpoint tulis ditolak tanpa token', async () => {

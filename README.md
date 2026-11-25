@@ -1,12 +1,18 @@
-# Bot Pengumuman Grup WhatsApp
+# KAYY ASSISTANT — Bot Pengumuman Grup WhatsApp
+
+Powered by Dev RifaiAl.
 
 Bot WhatsApp berbasis **Baileys** untuk mengelola dan mengirim pengumuman teks di satu atau beberapa grup. **Seluruh pengelolaan dilakukan langsung lewat perintah di grup WhatsApp** — tidak perlu chat pribadi dan tidak perlu dashboard. Pengiriman bisa otomatis lewat jadwal atau manual lewat `/send ID`.
 
-**Semua anggota grup boleh memakai seluruh perintah**, termasuk membuat, mengedit, dan mengirim pengumuman. Pengecualian: `/grup` dan `/grupaktif` hanya untuk admin terdaftar. Nomor admin dipakai untuk membatasi dua perintah itu dan untuk rincian di `/menu`.
+**Role dan izin grup sekarang berlaku:** hanya grup yang didaftarkan admin yang membalas perintah; grup baru otomatis tanpa akses. Role ditentukan dari JID WhatsApp: ADMIN (admin terdaftar), VIP (`vip_users`, bisa berakhir), USER. Command administrasi hanya untuk ADMIN. Lihat [COMMANDS.md](COMMANDS.md) untuk daftar command terbaru berprefix `.`.
 
 > **Catatan penting:** Baileys adalah integrasi WhatsApp Web **tidak resmi**, bukan WhatsApp Business API resmi dan tidak berafiliasi dengan WhatsApp. Gunakan nomor cadangan/khusus bot dan pahami risiko pembatasan akun.
 
 ## Fitur
+
+- `.menu` personal dengan mention asli, live clock Asia/Jakarta, cuaca Open-Meteo cache, jumlah fitur/command dinamis, dan 3 fallback angka.
+- Role-based access (ADMIN/USER/VIP), group access control, VIP masa aktif, dan `.rvo` untuk foto biasa yang eksplisit diizinkan.
+- Downloader publik `.tiktok`/`.instagram` modular via `yt-dlp` (opsional) dengan SSRF guard, rate limit, dan batas ukuran.
 
 - Command handler terstruktur untuk pengumuman, jadwal, grup, dan admin.
 - Wizard pembuatan pengumuman bertahap (`/set`) dengan format teks utuh (baris baru dipertahankan).

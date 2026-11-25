@@ -20,10 +20,12 @@ import { logger } from '../logger.js'
 import { parseDay, parseWeek, parseTime } from '../utils/format.js'
 import { aiService } from '../ai/service.js'
 import * as modelConfig from '../ai/modelConfig.js'
-import { verifyVipPassword, registerVip, listVips } from '../services/vipService.js'
+import { verifyVipPassword, registerVip, listVips, removeVip, setVipExpiry } from '../services/vipService.js'
 import * as processManager from '../system/processManager.js'
 import * as deployService from '../system/deployService.js'
 import * as backupService from '../system/backupService.js'
+import { getCurrentWeather } from '../services/weatherService.js'
+import { featureService } from '../services/featureService.js'
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -103,6 +105,30 @@ export function createApp({ bot, scheduler }) {
   })
 
   app.get('/api/vip', (_req, res) => res.json({ vips: listVips() }))
+  app.get('/api/vip/admin', requireManage, (_req, res) => res.json({ vips: listVips() }))
+  app.post('/api/vip/admin', requireManage, (req, res) => {
+    try {
+      const number = String(req.body?.number || '')
+      if (!number) return res.status(400).json({ error: 'Nomor wajib diisi.' })
+      registerVip(number, 'web-admin', req.body?.expiresAt || null)
+      audit(req, 'vip_admin_add', number)
+      return res.status(201).json({ ok: true, number })
+    } catch (err) { return res.status(400).json({ error: err.message }) }
+  })
+  app.put('/api/vip/admin/:number/expiry', requireManage, (req, res) => {
+    try {
+      const number = decodeURIComponent(req.params.number)
+      const expiry = setVipExpiry(number, req.body?.expiresAt || null)
+      audit(req, 'vip_admin_expiry', number)
+      return res.json({ ok: true, expiresAt: expiry })
+    } catch (err) { return res.status(400).json({ error: err.message }) }
+  })
+  app.delete('/api/vip/admin/:number', requireManage, (req, res) => {
+    const number = decodeURIComponent(req.params.number)
+    const ok = removeVip(number)
+    audit(req, 'vip_admin_remove', number)
+    return res.json({ ok, number })
+  })
 
   app.post('/api/vip', (req, res) => {
     if (!verifyVipPassword(req.body?.password)) {
@@ -301,6 +327,20 @@ export function createApp({ bot, scheduler }) {
     }
   })
 
+  app.get('/api/app/info', (_req, res) => res.json({
+    name: 'KAYY ASSISTANT', author: 'Dev RifaiAl', version: config.appVersion,
+    timezone: config.timezone, downloader: config.downloaderEnabled,
+  }))
+  app.get('/api/weather', async (_req, res) => res.json(await getCurrentWeather()))
+  app.get('/api/features', requireManage, (_req, res) => res.json({ features: featureService.listFeatures() }))
+  app.post('/api/features/:name', requireManage, (req, res) => {
+    const name = String(req.params.name || '')
+    if (!Object.hasOwn(featureService.FEATURES, name)) return res.status(400).json({ error: 'Fitur tidak dikenal.' })
+    try {
+      res.json({ ok: true, feature: featureService.setFeature(name, req.body.enabled, req.body.roles) })
+    } catch (err) { res.status(400).json({ error: err.message }) }
+  })
+
   // --- SYSTEM / DEPLOYMENT (selalu butuh login admin) ---
   app.get('/api/system/status', requireManage, (_req, res) => {
     res.json({ ...processManager.statusAll(), git: deployService.status() })
@@ -363,6 +403,7 @@ export function createApp({ bot, scheduler }) {
   })
 
   const dashDir = path.resolve(config.root, 'dashboard')
+  app.use('/assets', express.static(path.join(config.root, 'assets')))
   app.use(express.static(dashDir))
   app.get('/', (_req, res) => res.sendFile(path.join(dashDir, 'index.html')))
   return app

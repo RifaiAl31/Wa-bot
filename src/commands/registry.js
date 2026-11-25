@@ -10,8 +10,13 @@ export const COMMAND_GROUPS = [
   {
     title: '👤 *MENU UTAMA*',
     commands: [
-      c('/menu', '/menu', 'Menampilkan semua perintah.'),
-      c('/help', '/help', 'Bantuan penggunaan bot.'),
+      c('.menu', '.menu', 'Menu personal dengan identitas, waktu, dan cuaca.'),
+      c('.help', '.help', 'Bantuan penggunaan bot.'),
+      c('.user', '.user', 'Melihat JID, role, dan status akun.'),
+      c('.vip', '.vip', 'Informasi/aktivasi VIP lewat private chat.'),
+      c('.ping', '.ping', 'Status bot, server, WhatsApp, dan response time.'),
+      c('.status', '.status', 'Status koneksi bot.'),
+      c('.info', '.info', 'Informasi aplikasi dan fitur aktif.'),
     ],
   },
   {
@@ -87,6 +92,9 @@ export const COMMAND_GROUPS = [
       c('.iqc', '.iqc <teks>', 'Mockup chat gaya iPhone.'),
       c('.tqc', '.tqc <nama>|<teks>', 'Mockup chat gaya TikTok.'),
       c('.wq', '.wq <teks>', 'Meme gaya Windows klasik.'),
+      c('.rvo', '.rvo', 'Meneruskan foto biasa yang diizinkan (bukan view-once).'),
+      c('.tiktok', '.tiktok <link>', 'Mengunduh media TikTok publik.', { vip: true }),
+      c('.instagram', '.instagram <link>', 'Mengunduh media Instagram publik.', { vip: true }),
     ],
   },
 ]
