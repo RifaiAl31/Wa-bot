@@ -1,0 +1,33 @@
+{
+  "name": "wa-announcement-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp group announcement bot with scheduling, two-phase editing and multi-group delivery",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "init-db": "node scripts/init-db.js",
+    "migrate": "node scripts/migrate.js",
+    "backup": "node scripts/backup.js",
+    "add-admin": "node scripts/add-admin.js",
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "0.1.80",
+    "@whiskeysockets/baileys": "6.7.24",
+    "better-sqlite3": "13.2.0",
+    "dotenv": "^16.4.5",
+    "express": "5.3.0",
+    "mammoth": "^1.13.0",
+    "multer": "^2.5.0",
+    "node-cron": "4.6.0",
+    "pdf-parse": "^2.4.5",
+    "pino": "10.4.0",
+    "qrcode": "1.5.4",
+    "sharp": "0.35.5"
+  }
+}

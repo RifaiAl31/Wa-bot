@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: wa-announcement-bot
+    env: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production
+      - key: OPEN_ACCESS
+        value: "true"
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: VIP_PASSWORD
+        sync: false
+      - key: ADMIN_NUMBERS
+        sync: false
+    disk:
+      name: wa-bot-data
+      mountPath: /app/data
+      sizeGB: 1

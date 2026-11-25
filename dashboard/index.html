@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel Bot Pengumuman WhatsApp</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">WA</span><div><strong>Pengumuman Bot</strong><small>Panel kontrol</small></div></div>
+    <nav id="nav">
+      <button class="nav-item active" data-view="dashboard">▦ Ringkasan</button>
+      <button class="nav-item" data-view="announcements">✎ Pengumuman</button>
+      <button class="nav-item" data-view="import">⇪ Import Dokumen</button>
+      <button class="nav-item" data-view="schedules">◷ Jadwal</button>
+      <button class="nav-item" data-view="groups">◉ Grup</button>
+      <button class="nav-item" data-view="ai">✦ AI Assistant</button>
+      <button class="nav-item" data-view="history">≡ Riwayat</button>
+      <button class="nav-item" data-view="settings">⚙ Pengaturan</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div id="sideConn" class="pill">Memuat…</div>
+      <div class="muted tiny">Baileys · WhatsApp Web tidak resmi</div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div><h1 id="pageTitle">Ringkasan</h1><div class="muted" id="pageSubtitle">Pantau koneksi dan pengiriman bot</div></div>
+      <div class="topbar-right">
+        <span id="clock" class="muted"></span>
+        <span class="pill ok">Akses umum</span>
+      </div>
+    </header>
+
+    <div class="content">
+      <section class="view" id="view-dashboard">
+        <div class="grid stats">
+          <div class="card"><h3>Koneksi WhatsApp</h3><div id="statConn" class="big">-</div><div id="statConnNote" class="note"></div></div>
+          <div class="card"><h3>Pengumuman</h3><div id="statAnn" class="big">0</div><div id="statAnnNote" class="note"></div></div>
+          <div class="card"><h3>Grup terdaftar</h3><div id="statGroups" class="big">0</div><div id="statSync" class="note"></div></div>
+          <div class="card"><h3>Pengiriman</h3><div id="statDeliv" class="big">0</div><div id="statTick" class="note"></div></div>
+        </div>
+        <div class="two-col">
+          <div class="card"><h3>QR Login</h3><div id="qrBox" class="qr-box"><span class="muted">Memuat…</span></div><p class="note">Pindai di WhatsApp → Perangkat Tertaut → Tautkan perangkat.</p></div>
+          <div class="card"><h3>Jadwal mendatang</h3><div id="dashUpcoming" class="muted">Memuat…</div></div>
+        </div>
+        <div class="card"><h3>Pengumuman terbaru</h3><div id="dashAnn"></div></div>
+      </section>
+
+      <section class="view" id="view-announcements" hidden>
+        <div class="toolbar">
+          <input id="annSearch" type="search" placeholder="Cari judul, isi, atau kategori…">
+          <button id="btnNew" class="btn primary">+ Pengumuman baru</button>
+        </div>
+        <div class="card"><table><thead><tr>
+          <th>ID</th><th>Judul / Kategori</th><th>Jadwal</th><th>Grup</th><th>Status</th><th>Aksi</th>
+        </tr></thead><tbody id="annTable"></tbody></table></div>
+        <p class="note">Perubahan dari web langsung tersimpan di database yang sama dengan bot. Perintah WhatsApp (`/set`, `/edit`, `/update`) tetap berfungsi.</p>
+      </section>
+
+      <section class="view" id="view-import" hidden>
+        <div class="card">
+          <h3>Import PDF / DOCX / TXT / MD → draf pengumuman</h3>
+          <p class="muted">Teks diekstrak dari dokumen, lalu <strong>harus Anda periksa dan edit</strong> sebelum disimpan. Bot tetap mengirim pesan teks biasa — file tidak pernah dikirim ke grup.</p>
+          <label class="dropzone" id="dropzone">
+            <input id="fileInput" type="file" accept=".pdf,.docx,.doc,.txt,.md" hidden>
+            <div class="drop-icon">⇪</div>
+            <div>Pilih atau tarik file ke sini</div>
+            <div class="muted tiny" id="fileHint">PDF, DOCX, TXT, MD · maks 10 MB</div>
+          </label>
+          <div id="importMeta" class="note"></div>
+          <label class="field-label">Hasil ekstraksi — edit bebas di sini</label>
+          <textarea id="importText" class="editor-textarea" rows="14" placeholder="Teks hasil ekstraksi akan muncul di sini…"></textarea>
+          <div class="toolbar">
+            <span id="importCount" class="muted tiny">0 karakter</span>
+            <button id="btnImportToEditor" class="btn primary" disabled>Buat pengumuman dari teks ini</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-schedules" hidden>
+        <div class="card"><h3>Semua jadwal</h3><div id="scheduleTable"></div></div>
+        <div class="card"><h3>Perkiraan jadwal berikutnya</h3><div id="schedUpcoming" class="muted">Memuat…</div></div>
+        <p class="note">Minggu ke-N dihitung dari kemunculan hari tersebut dalam bulan (bukan rentang tanggal). Minggu ke-5 dilewati bila tidak ada. Zona waktu Asia/Jakarta.</p>
+      </section>
+
+      <section class="view" id="view-groups" hidden>
+        <div class="card"><h3>Grup yang terdeteksi bot</h3><div id="groupTable"></div></div>
+        <p class="note">Grup berstatus terdaftar bisa dipilih sebagai tujuan pengumuman. Sinkronisasi otomatis saat bot terhubung.</p>
+      </section>
+
+      <section class="view" id="view-ai" hidden>
+        <div class="grid stats">
+          <div class="card"><h3>Koneksi AI</h3><div id="aiConfig" class="big">-</div><div id="aiConfigNote" class="note"></div></div>
+          <div class="card"><h3>Model aktif</h3><div id="aiActive" class="big">-</div><div id="aiActiveId" class="note"></div></div>
+          <div class="card"><h3>Permintaan</h3><div id="aiTotal" class="big">0</div><div id="aiUsageNote" class="note"></div></div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <h3>Daftar model gratis OpenRouter</h3>
+            <select id="aiModelSelect" style="width:100%"></select>
+            <div class="toolbar" style="margin-top:10px">
+              <button id="aiChangeModel" class="btn primary small">Gunakan model ini</button>
+              <button id="aiRefreshModels" class="btn ghost small">Muat ulang daftar</button>
+            </div>
+            <div id="aiNotice" class="note"></div>
+            <label class="field-label" style="margin-top:12px">Atau ketik ID model manual</label>
+            <input id="aiManualModel" placeholder="mis. gemini-2.0-flash atau openrouter/...:free" style="width:100%">
+            <button id="aiManualModelBtn" class="btn ghost small" style="margin-top:8px">Pakai model ketikan</button>
+            <p class="note">Model OpenRouter divalidasi dari harga 0/0. Model Gemini dibatasi oleh daftar GEMINI_FREE_MODELS di .env.</p>
+          </div>
+          <div class="card"><h3>Batas penggunaan</h3><div id="aiLimits" class="note">Memuat…</div></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <h3>KONFIGURASI MODEL VISION</h3>
+          <div id="aiVisionActive" class="note">Memuat…</div>
+          <select id="aiVisionSelect" style="width:100%;margin-top:10px"></select>
+          <div class="toolbar" style="margin-top:10px">
+            <button id="aiVisionChange" class="btn primary small">Gunakan Model Ini</button>
+            <button id="aiVisionRefresh" class="btn ghost small">Muat Ulang Daftar</button>
+          </div>
+          <div id="aiVisionNotice" class="note"></div>
+          <p class="note">Hanya model gratis dengan dukungan input gambar berdasarkan metadata. Model Gemini hanya dipakai untuk user VIP.</p>
+        </div>
+        <div class="card"><h3>Riwayat penggunaan & pergantian model</h3><div id="aiUsage"></div></div>
+      </section>
+
+      <section class="view" id="view-history" hidden>
+        <div class="card"><h3>Riwayat pengiriman</h3><div id="historyTable"></div></div>
+        <div class="card"><h3>Aktivitas admin / web</h3><div id="activityTable"></div></div>
+      </section>
+
+      <section class="view" id="view-settings" hidden>
+        <div class="two-col">
+          <div class="card">
+            <h3>Admin terdaftar</h3>
+            <div id="adminList"></div>
+            <form id="adminForm" class="inline-form">
+              <input id="adminNumber" placeholder="6281234567890" required>
+              <input id="adminName" placeholder="Nama (opsional)">
+              <button class="btn primary small" type="submit">Tambah</button>
+            </form>
+            <p class="note">Nomor divalidasi dari database. Anggota biasa tidak bisa menjalankan perintah administrasi.</p>
+          </div>
+          <div class="card" style="margin-top:16px">
+            <h3>VIP / User terdaftar</h3>
+            <form id="vipForm" class="inline-form">
+              <input id="vipPassword" type="password" placeholder="Kata sandi VIP" required>
+              <input id="vipNumber" placeholder="628..." required>
+              <input id="vipName" placeholder="Nama (opsional)">
+              <button class="btn primary small" type="submit">Daftarkan</button>
+            </form>
+            <div id="vipList" style="margin-top:12px"></div>
+            <p class="note">Bisa juga dari grup WhatsApp: <code>/vip &lt;sandi&gt; [nomor]</code>. User biasa/VIP dibatasi 5 pertanyaan AI per jam; admin terdaftar bebas.</p>
+          </div>
+          <div class="card" style="margin-top:16px">
+            <h3>Nomor WhatsApp Bot</h3>
+            <div id="botNumber" class="big">-</div>
+            <div id="botStatus" class="note"></div>
+            <div id="botQr" class="qr-box" hidden></div>
+            <div id="botRelinkStatus" class="note"></div>
+            <div class="row-actions" style="margin-top:12px">
+              <button id="btnRelink" class="btn primary small">Ganti Nomor Bot</button>
+              <button id="btnDisconnect" class="btn danger small">Putuskan Koneksi</button>
+            </div>
+            <p class="note">Sesi lama diarsipkan ke <code>data/auth-archive</code>. Database pengumuman, jadwal, riwayat, dan admin tidak diubah.</p>
+          </div>
+          <div class="card">
+            <h3>Scheduler & cadangan</h3>
+            <label class="switch-row"><input type="checkbox" id="schedulerToggle"> Aktifkan penjadwalan otomatis</label>
+            <button id="btnBackup" class="btn ghost">Buat backup database</button>
+            <div id="settingsInfo" class="note"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><h2 id="modalTitle">Pengumuman baru</h2><button id="modalClose" class="icon-btn">×</button></div>
+    <form id="editorForm" class="modal-body">
+      <input type="hidden" id="fId">
+      <div class="two-col">
+        <label class="field">Judul<input id="fTitle" required placeholder="Contoh: Kerja Bakti Minggu"></label>
+        <label class="field">Kategori (opsional)<input id="fCategory" placeholder="Kegiatan, Rapat, dll"></label>
+      </div>
+      <label class="field">Isi pesan<textarea id="fBody" class="editor-textarea" rows="12" required placeholder="Tulis pengumuman apa adanya. Baris baru dipertahankan persis saat dikirim."></textarea></label>
+      <div class="three-col">
+        <label class="field">Hari<select id="fWeekday"></select></label>
+        <label class="field">Minggu<select id="fWeek"></select></label>
+        <label class="field">Jam (WIB)<input id="fTime" type="text" placeholder="19.00" required></label>
+      </div>
+      <div class="field"><label>Grup tujuan <span class="muted tiny">(bisa lebih dari satu)</span></label><div id="fTargets" class="target-list"></div></div>
+      <label class="switch-row"><input type="checkbox" id="fActive" checked> Aktif (jadwal berjalan)</label>
+      <p id="editorError" class="error-text"></p>
+      <div class="modal-foot">
+        <button type="button" id="btnDelete" class="btn danger" hidden>Hapus</button>
+        <button type="button" id="btnSend" class="btn ghost" hidden>Kirim sekarang</button>
+        <button type="button" id="modalCancel" class="btn ghost">Batal</button>
+        <button type="submit" class="btn primary">Simpan pengumuman</button>
+      </div>
+    </form>
+  </div>
+</div>
+<div id="toast" class="toast" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>

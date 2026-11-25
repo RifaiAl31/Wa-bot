@@ -1,0 +1,473 @@
+const DAYS = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu']
+const WEEKS = ['Setiap minggu','Minggu ke-1','Minggu ke-2','Minggu ke-3','Minggu ke-4','Minggu ke-5']
+const $ = (id) => document.getElementById(id)
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+const state = { view:'dashboard', auth:null, status:null, announcements:[], groups:[], schedules:[], deliveries:[], activity:[], settings:null, aiStatus:null, aiModels:[], aiVisionModels:[], aiUsage:null, whatsapp:null, vips:[] }
+
+async function api(path, options = {}) {
+  const res = await fetch(path, { headers:{ 'Content-Type':'application/json', ...(options.headers||{}) }, ...options })
+  let data = {}
+  try { data = await res.json() } catch { data = {} }
+  if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`)
+  return data
+}
+
+function toast(msg, bad = false) {
+  const el = $('toast')
+  el.textContent = msg
+  el.style.borderColor = bad ? 'var(--bad)' : 'var(--accent)'
+  el.hidden = false
+  clearTimeout(toast.timer)
+  toast.timer = setTimeout(() => { el.hidden = true }, 4200)
+}
+
+async function loadAll() {
+  const paths = ['/api/auth','/api/status','/api/announcements','/api/groups','/api/schedules','/api/deliveries','/api/activity','/api/settings','/api/ai/status','/api/ai/models','/api/ai/usage','/api/whatsapp/status','/api/vip','/api/ai/vision/models']
+  const results = await Promise.all(paths.map(p => api(p).catch(e => ({ __error:e.message }))))
+  const [auth, status, ann, groups, sched, deliv, act, settings, aiStatus, aiModels, aiUsage, whatsapp, vips, aiVision] = results
+  if (auth.__error) return
+  state.auth = auth; state.status = status
+  state.announcements = ann.announcements || []
+  state.groups = groups.groups || []
+  state.schedules = sched.schedules || []
+  state.deliveries = deliv.deliveries || []
+  state.activity = act.activity || []
+  state.settings = settings
+  state.aiStatus = aiStatus?.__error ? null : aiStatus
+  state.aiModels = aiModels?.models || []
+  state.aiVisionModels = aiVision?.models || []
+  state.aiUsage = aiUsage?.__error ? null : aiUsage
+  state.whatsapp = whatsapp?.__error ? null : whatsapp
+  state.vips = vips?.vips || []
+  render()
+}
+
+function render() {
+  renderTopbar(); renderDashboard(); renderAnnouncements(); renderSchedules()
+  renderGroups(); renderHistory(); renderSettings(); renderAI(); renderBotAccount(); renderVips()
+}
+
+function renderTopbar() {
+  const s = state.status
+  const connected = s?.connected
+  $('clock').textContent = new Date().toLocaleTimeString('id-ID')
+  $('sideConn').textContent = connected ? '● TERHUBUNG' : '○ TERPUTUS'
+  $('sideConn').className = 'pill ' + (connected ? 'ok' : 'bad')
+}
+
+function renderDashboard() {
+  const s = state.status
+  if (!s) return
+  $('statConn').textContent = s.connected ? 'Online' : 'Offline'
+  $('statConnNote').textContent = `Zona ${s.timezone} · reconnect ${s.reconnectAttempts || 0}`
+  $('statAnn').textContent = s.stats.announcements
+  $('statAnnNote').textContent = `${s.stats.active} aktif · ${state.announcements.length} total`
+  $('statGroups').textContent = s.stats.groups
+  $('statSync').textContent = s.groupSyncError ? 'Error: ' + s.groupSyncError : 'Sinkronisasi grup OK'
+  $('statDeliv').textContent = s.stats.deliveries
+  $('statTick').textContent = s.scheduler.lastTick ? `Tick ${s.scheduler.lastTick.at} · diproses ${s.scheduler.lastTick.processed}` : 'Belum ada tick'
+  api('/api/qr').then(d => { $('qrBox').innerHTML = `<img src="${d.qr}" alt="QR">` })
+    .catch(() => { $('qrBox').innerHTML = '<span class="muted">Tidak ada QR aktif (bot terhubung / menunggu QR).</span>' })
+  const up = state.schedules.length ? state.schedules.slice(0,6).map(x =>
+    `<div><code>${esc(x.announcement_id)}</code> ${esc(x.title||'')}<br><span class="muted">${DAYS[x.weekday]} · ${WEEKS[x.week_of_month]} · ${x.time} · ${x.is_active?'aktif':'nonaktif'}</span></div>`).join('<div class="divider"></div>') : '<span class="muted">Belum ada jadwal.</span>'
+  $('dashUpcoming').innerHTML = up
+  $('dashAnn').innerHTML = state.announcements.length ? `<table><thead><tr><th>ID</th><th>Judul</th><th>Jadwal</th><th>Status</th></tr></thead><tbody>${state.announcements.slice(0,8).map(a => annRow(a, false)).join('')}</tbody></table>` : '<span class="muted">Belum ada pengumuman.</span>'
+}
+
+function annRow(a, actions = true) {
+  const sch = `${DAYS[a.weekday]} · ${WEEKS[a.week_of_month]} · ${a.time}`
+  return `<tr><td><code>${esc(a.id)}</code></td><td><strong>${esc(a.title)}</strong>${a.category?`<br><span class="muted tiny">${esc(a.category)}</span>`:''}</td>
+    <td>${sch}</td><td><span class="pill ${a.is_active?'ok':'bad'}">${a.is_active?'AKTIF':'NONAKTIF'}</span></td>
+    ${actions ? `<td><div class="row-actions"><button class="btn small" data-action="edit" data-id="${esc(a.id)}">Edit</button>
+    <button class="btn small" data-action="send" data-id="${esc(a.id)}">Kirim</button>
+    <button class="btn small" data-action="toggle" data-id="${esc(a.id)}" data-active="${a.is_active}">${a.is_active?'Nonaktifkan':'Aktifkan'}</button></div></td>` : ''}</tr>`
+}
+
+function renderAnnouncements() {
+  const q = ($('annSearch').value || '').toLowerCase().trim()
+  const rows = state.announcements.filter(a => !q || `${a.title} ${a.body} ${a.category||''}`.toLowerCase().includes(q))
+  $('annTable').innerHTML = rows.length ? rows.map(a => annRow(a)).join('') : '<tr><td colspan="6" class="muted">Tidak ada pengumuman.</td></tr>'
+}
+
+function renderSchedules() {
+  $('scheduleTable').innerHTML = state.schedules.length ? `<table><thead><tr><th>ID</th><th>Judul</th><th>Hari</th><th>Minggu</th><th>Jam</th><th>Status</th></tr></thead><tbody>
+    ${state.schedules.map(s => `<tr><td><code>${esc(s.announcement_id)}</code></td><td>${esc(s.title||'')}</td><td>${DAYS[s.weekday]}</td><td>${WEEKS[s.week_of_month]}</td><td>${s.time}</td><td><span class="pill ${s.is_active?'ok':'bad'}">${s.is_active?'AKTIF':'NONAKTIF'}</span></td></tr>`).join('')}
+    </tbody></table>` : '<span class="muted">Belum ada jadwal.</span>'
+  $('schedUpcoming').innerHTML = state.schedules.length ? state.schedules.slice(0,10).map(s =>
+    `<div>${esc(s.announcement_id)} — ${esc(s.title||'')} · ${DAYS[s.weekday]} ${WEEKS[s.week_of_month]} ${s.time}</div>`).join('') : '<span class="muted">Belum ada jadwal.</span>'
+}
+
+function renderGroups() {
+  $('groupTable').innerHTML = state.groups.length ? `<table><thead><tr><th>Grup</th><th>JID</th><th>Peserta</th><th>Terdaftar</th><th>Aksi</th></tr></thead><tbody>
+    ${state.groups.map(g => `<tr><td>${esc(g.name||'-')}</td><td><code>${esc(g.jid)}</code></td><td>${g.participants||0}</td>
+    <td><span class="pill ${g.is_registered?'ok':'bad'}">${g.is_registered?'YA':'TIDAK'}</span></td>
+    <td><button class="btn small" data-action="group" data-jid="${esc(g.jid)}" data-reg="${g.is_registered}">${g.is_registered?'Cabut':'Daftarkan'}</button></td></tr>`).join('')}
+    </tbody></table>` : '<span class="muted">Belum ada grup. Bot perlu terhubung dan masuk ke grup.</span>'
+}
+
+function renderHistory() {
+  $('historyTable').innerHTML = state.deliveries.length ? `<table><thead><tr><th>Waktu</th><th>ID</th><th>Grup</th><th>Status</th><th>Catatan</th></tr></thead><tbody>
+    ${state.deliveries.slice(0,40).map(d => `<tr><td>${esc(d.sent_at)}</td><td><code>${esc(d.announcement_id)}</code></td><td>${esc(d.group_jid)}</td>
+    <td><span class="pill ${d.status==='sent'?'ok':'bad'}">${esc(d.status)}</span></td><td>${esc(d.reason||'')}</td></tr>`).join('')}</tbody></table>` : '<span class="muted">Belum ada pengiriman.</span>'
+  $('activityTable').innerHTML = state.activity.length ? `<table><thead><tr><th>Waktu</th><th>Aktor</th><th>Aksi</th><th>Detail</th></tr></thead><tbody>
+    ${state.activity.slice(0,40).map(a => `<tr><td>${esc(a.created_at)}</td><td>${esc(a.admin_jid||'-')}</td><td>${esc(a.action)}</td><td>${esc(a.detail||'')}</td></tr>`).join('')}</tbody></table>` : '<span class="muted">Belum ada aktivitas.</span>'
+}
+
+function renderSettings() {
+  const s = state.settings
+  if (!s) return
+  const admins = s.admins || []
+  $('adminList').innerHTML = admins.length ? admins.map(a =>
+    `<div class="row-actions" style="justify-content:space-between;padding:5px 0"><span>${esc(a.name||a.number)} <span class="muted tiny">${esc(a.number)}</span></span>
+    <span>${a.is_active?'<span class="pill ok">aktif</span>':`<button class="btn small" data-action="admin-activate" data-number="${esc(a.number)}">Aktifkan</button>`}</span></div>`).join('') : '<span class="muted">Belum ada admin.</span>'
+  const enabled = (s.settings||[]).find(x => x.key === 'scheduler_enabled')?.value === '1'
+  $('schedulerToggle').checked = enabled
+  $('settingsInfo').innerHTML = `Zona waktu: ${esc(s.timezone)}<br>Format didukung: ${(s.allowedUploads||[]).join(', ')}<br>Maks upload: ${s.maxUploadMb} MB<br>Akses web: umum (tanpa kata sandi)`
+}
+
+function switchView(view) {
+  state.view = view
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view))
+  document.querySelectorAll('.view').forEach(v => { v.hidden = v.id !== `view-${view}` })
+  const titles = { dashboard:['Ringkasan','Pantau koneksi dan pengiriman bot'], announcements:['Pengumuman','Buat, edit, dan kelola semua pengumuman'], import:['Import Dokumen','Ubah PDF/DOCX menjadi draf pesan teks'], schedules:['Jadwal','Atur hari, minggu, dan jam pengiriman'], groups:['Grup','Kelola grup tujuan pengumuman'], ai:['AI Assistant','Model gratis OpenRouter dan batas pemakaian'], history:['Riwayat','Log pengiriman dan aktivitas'], settings:['Pengaturan','Nomor bot, admin, scheduler, dan cadangan'] }
+  $('pageTitle').textContent = titles[view][0]
+  $('pageSubtitle').textContent = titles[view][1]
+}
+
+function fillSelects() {
+  $('fWeekday').innerHTML = DAYS.map((d,i) => `<option value="${i}">${d}</option>`).join('')
+  $('fWeek').innerHTML = WEEKS.map((w,i) => `<option value="${i}">${w}</option>`).join('')
+}
+
+function renderTargetCheckboxes(selected = []) {
+  const registered = state.groups.filter(g => g.is_registered)
+  $('fTargets').innerHTML = registered.length ? registered.map(g =>
+    `<label><input type="checkbox" value="${esc(g.jid)}" ${selected.includes(g.jid)?'checked':''}> ${esc(g.name||g.jid)} <span class="muted tiny">${esc(g.jid)}</span></label>`).join('')
+    : '<span class="muted">Belum ada grup terdaftar. Daftarkan grup di menu Grup.</span>'
+}
+
+async function openEditor(id = null, preset = {}) {
+  $('editorError').textContent = ''
+  $('modalTitle').textContent = id ? `Edit ${id}` : 'Pengumuman baru'
+  $('fId').value = id || ''
+  $('fTitle').value = preset.title || ''
+  $('fCategory').value = preset.category || ''
+  $('fBody').value = preset.body || ''
+  $('fWeekday').value = preset.weekday ?? 0
+  $('fWeek').value = preset.week ?? 0
+  $('fTime').value = preset.time || '08:00'
+  $('fActive').checked = preset.is_active !== false
+  $('btnDelete').hidden = !id
+  $('btnSend').hidden = !id
+  let targets = preset.targets || []
+  if (id) {
+    try {
+      const d = await api(`/api/announcements/${encodeURIComponent(id)}`)
+      $('fTitle').value = d.announcement.title
+      $('fCategory').value = d.announcement.category || ''
+      $('fBody').value = d.announcement.body
+      $('fWeekday').value = d.schedule?.weekday ?? 0
+      $('fWeek').value = d.schedule?.week_of_month ?? 0
+      $('fTime').value = d.schedule?.time || '08:00'
+      $('fActive').checked = Boolean(d.announcement.is_active)
+      targets = d.targets.map(t => t.jid)
+    } catch (e) { toast(e.message, true); return }
+  }
+  renderTargetCheckboxes(targets)
+  $('modal').hidden = false
+  $('fTitle').focus()
+}
+
+function closeEditor() { $('modal').hidden = true }
+
+function editorPayload() {
+  return {
+    title: $('fTitle').value.trim(),
+    category: $('fCategory').value.trim(),
+    body: $('fBody').value.trim(),
+    weekday: Number($('fWeekday').value),
+    week: Number($('fWeek').value),
+    time: $('fTime').value.trim(),
+    targets: [...document.querySelectorAll('#fTargets input:checked')].map(x => x.value),
+    is_active: $('fActive').checked,
+  }
+}
+
+async function saveEditor() {
+  const id = $('fId').value
+  const payload = editorPayload()
+  try {
+    if (id) await api(`/api/announcements/${encodeURIComponent(id)}`, { method:'PUT', body:JSON.stringify(payload) })
+    else await api('/api/announcements', { method:'POST', body:JSON.stringify(payload) })
+    closeEditor()
+    toast(id ? `${id} diperbarui` : 'Pengumuman dibuat')
+    await loadAll()
+  } catch (e) {
+    $('editorError').textContent = e.message
+    toast(e.message, true)
+  }
+}
+
+async function doSend(id) {
+  try {
+    const r = await api(`/api/send/${encodeURIComponent(id)}`, { method:'POST' })
+    toast(`${id}: ${r.sent||0}/${r.total||0} grup berhasil`)
+    await loadAll()
+  } catch (e) { toast(e.message, true) }
+}
+
+async function doImport(file) {
+  $('importMeta').textContent = 'Mengekstrak teks…'
+  const form = new FormData()
+  form.append('file', file)
+  try {
+    const res = await fetch('/api/import', { method:'POST', body:form })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Gagal mengimpor')
+    $('importText').value = data.text
+    $('importCount').textContent = `${data.meta.chars} karakter · ${data.meta.filename}`
+    $('btnImportToEditor').disabled = false
+    $('importMeta').textContent = `Berasal dari ${data.meta.filename} (${data.meta.extension}). Periksa dan edit teks sebelum menyimpan.`
+    toast('Teks berhasil diekstrak')
+  } catch (e) {
+    $('importMeta').textContent = ''
+    toast(e.message, true)
+  }
+}
+
+// --- Event bindings ---
+$('nav').addEventListener('click', e => {
+  const b = e.target.closest('.nav-item')
+  if (b) switchView(b.dataset.view)
+})
+
+$('annTable').addEventListener('click', e => {
+  const b = e.target.closest('button[data-action]')
+  if (!b) return
+  const id = b.dataset.id
+  if (b.dataset.action === 'edit') openEditor(id)
+  if (b.dataset.action === 'send') doSend(id)
+  if (b.dataset.action === 'toggle') api(`/api/announcements/${encodeURIComponent(id)}/active`, {
+    method:'POST', body:JSON.stringify({ active:b.dataset.active !== '1' })
+  }).then(async () => { await loadAll(); toast('Status pengumuman diperbarui') })
+    .catch(err => toast(err.message, true))
+})
+$('dashAnn').addEventListener('click', e => {
+  const b = e.target.closest('button[data-action]')
+  if (!b) return
+  if (b.dataset.action === 'edit') openEditor(b.dataset.id)
+  if (b.dataset.action === 'send') doSend(b.dataset.id)
+})
+
+$('btnNew').addEventListener('click', () => openEditor())
+$('annSearch').addEventListener('input', renderAnnouncements)
+$('modalClose').addEventListener('click', closeEditor)
+$('modalCancel').addEventListener('click', closeEditor)
+$('editorForm').addEventListener('submit', e => { e.preventDefault(); saveEditor() })
+$('btnSend').addEventListener('click', () => { const id = $('fId').value; if (id) doSend(id) })
+$('btnDelete').addEventListener('click', async () => {
+  const id = $('fId').value
+  if (!id || !confirm(`Hapus pengumuman ${id}? Jadwal dan target ikut terhapus.`)) return
+  try { await api(`/api/announcements/${encodeURIComponent(id)}`, { method:'DELETE' }); closeEditor(); toast(`${id} dihapus`); await loadAll() }
+  catch (e) { toast(e.message, true) }
+})
+
+$('fileInput').addEventListener('change', e => { if (e.target.files[0]) doImport(e.target.files[0]) })
+const dz = $('dropzone')
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag') })
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'))
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag')
+  if (e.dataTransfer.files[0]) doImport(e.dataTransfer.files[0])
+})
+$('importText').addEventListener('input', () => { $('importCount').textContent = `${$('importText').value.length} karakter` })
+$('btnImportToEditor').addEventListener('click', () => {
+  const text = $('importText').value.trim()
+  if (!text) return toast('Teks masih kosong', true)
+  const name = ($('importMeta').textContent.match(/dari\s+(.+?)\s*\(/) || [])[1] || 'Dokumen'
+  openEditor(null, { title:name.replace(/\.(pdf|docx|txt|md)$/i,''), body:text })
+})
+
+$('groupTable').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-action="group"]')
+  if (!b) return
+  try {
+    await api(`/api/groups/${encodeURIComponent(b.dataset.jid)}`, { method:'PUT', body:JSON.stringify({ registered:b.dataset.reg !== '1' }) })
+    await loadAll(); toast('Status grup diperbarui')
+  } catch (err) { toast(err.message, true) }
+})
+
+$('adminForm').addEventListener('submit', async e => {
+  e.preventDefault()
+  try {
+    await api('/api/admins', { method:'POST', body:JSON.stringify({ number:$('adminNumber').value, name:$('adminName').value }) })
+    $('adminNumber').value = ''; $('adminName').value = ''
+    await loadAll(); toast('Admin ditambahkan')
+  } catch (err) { toast(err.message, true) }
+})
+$('adminList').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-action="admin-activate"]')
+  if (!b) return
+  try { await api('/api/admins/' + encodeURIComponent(b.dataset.number), { method:'DELETE' }); await loadAll() }
+  catch (err) { toast(err.message, true) }
+})
+$('schedulerToggle').addEventListener('change', async e => {
+  try { await api('/api/settings/scheduler', { method:'POST', body:JSON.stringify({ enabled:e.target.checked }) }); toast('Scheduler diperbarui') }
+  catch (err) { toast(err.message, true) }
+})
+$('btnBackup').addEventListener('click', async () => {
+  try { const r = await api('/api/backup', { method:'POST' }); toast('Backup: ' + r.path) }
+  catch (err) { toast(err.message, true) }
+})
+
+function renderAI() {
+  const s = state.aiStatus
+  if (!s) return
+  $('aiConfig').textContent = s.configured ? 'AKTIF' : 'BELUM AKTIF'
+  $('aiConfigNote').textContent = s.configured
+    ? `Provider: ${s.provider || '-'} · kunci: ${s.keyVariable || '-'} · model gratis: ${state.aiModels.length}`
+    : 'Isi OPENROUTER_API_KEY atau GEMINI_API_KEY di .env lalu restart bot.'
+  const m = s.activeModel
+  $('aiActive').textContent = m?.name || '-'
+  $('aiActiveId').textContent = m?.id || 'Belum ada model aktif'
+  $('aiTotal').textContent = s.usage?.total || 0
+  $('aiUsageNote').textContent = `${s.usage?.success || 0} sukses · ${s.usage?.failed || 0} gagal · ${s.usage?.blocked || 0} dibatasi`
+  const l = s.limits || {}
+  $('aiLimits').innerHTML = [
+    `Cooldown: ${l.cooldownSeconds ?? '-'} detik`,
+    `Maks per pengguna: ${l.maxPerUser ?? '-'} / ${l.windowMinutes ?? '-'} menit`,
+    `Panjang pertanyaan: ${l.maxQuestionChars ?? '-'} karakter`,
+    `Konteks percakapan: ${l.contextMessages ?? 0} pesan`,
+  ].join('<br>')
+  const sel = $('aiModelSelect')
+  const previous = sel.value
+  sel.innerHTML = state.aiModels.length
+    ? state.aiModels.map(x => `<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.id)}</option>`).join('')
+    : '<option value="">Tidak ada model gratis</option>'
+  const options = [...sel.options].map(o => o.value)
+  if (options.includes(previous)) sel.value = previous
+  else if (m?.id && options.includes(m.id)) sel.value = m.id
+  const u = state.aiUsage
+  const visionActive = s.activeModelIds?.vision || '-'
+  $('aiVisionActive').textContent = `Model vision aktif: ${visionActive}`
+  const vsel = $('aiVisionSelect')
+  const previousVision = vsel.value
+  vsel.innerHTML = state.aiVisionModels.length
+    ? state.aiVisionModels.map(m => `<option value="${esc(m.id)}">${esc(m.name)} — ${esc(m.provider)} — ${esc(m.id)}</option>`).join('')
+    : '<option value="">Tidak ada model vision gratis</option>'
+  if ([...vsel.options].some(o => o.value === previousVision)) vsel.value = previousVision
+  else if (visionActive !== '-' && [...vsel.options].some(o => o.value === visionActive)) vsel.value = visionActive
+
+  const logs = u?.logs || []
+  $('aiUsage').innerHTML = logs.length ? `<table><thead><tr><th>Waktu</th><th>Pengguna</th><th>Model</th><th>Status</th><th>Catatan</th></tr></thead><tbody>
+    ${logs.slice(0, 30).map(x => `<tr><td>${esc(x.created_at)}</td><td>${esc(x.user_jid || '-')}</td><td>${esc(x.model_id || '-')}</td>
+    <td><span class="pill ${x.status === 'success' ? 'ok' : 'bad'}">${esc(x.status)}</span></td><td>${esc(x.reason || '')}</td></tr>`).join('')}
+    </tbody></table>` : '<span class="muted">Belum ada penggunaan AI.</span>'
+}
+
+function renderBotAccount() {
+  const w = state.whatsapp || {}
+  $('botNumber').textContent = w.botNumber || '-'
+  $('botStatus').textContent = w.connected ? 'TERHUBUNG' : 'TERPUTUS'
+  $('botStatus').className = 'note ' + (w.connected ? '' : 'muted')
+  const st = w.relinkState || {}
+  const labels = { idle: 'Siap', processing: 'Menyiapkan sesi baru…', waiting_qr: 'Menunggu QR dipindai…', connected: 'Nomor baru berhasil terhubung.', disconnected: 'Koneksi diputuskan.', failed: 'Gagal: ' + (st.error || 'tidak diketahui') }
+  $('botRelinkStatus').textContent = `${labels[st.status] || st.status || ''}${st.message ? ' — ' + st.message : ''}`
+  const box = $('botQr')
+  if (st.status === 'waiting_qr') {
+    api('/api/qr').then(d => { box.innerHTML = `<img src="${d.qr}" alt="QR bot baru">`; box.hidden = false })
+      .catch(() => { box.innerHTML = '<span class="muted">QR belum tersedia.</span>'; box.hidden = false })
+  } else box.hidden = true
+}
+
+$('aiVisionRefresh').addEventListener('click', async () => {
+  try {
+    const d = await api('/api/ai/vision/models')
+    state.aiVisionModels = d.models || []
+    renderAI()
+    toast(`Model vision diperbarui (${state.aiVisionModels.length})`)
+  } catch (e) { toast(e.message, true) }
+})
+$('aiVisionChange').addEventListener('click', async () => {
+  const model = $('aiVisionSelect').value
+  if (!model) return toast('Tidak ada model vision yang bisa dipilih.', true)
+  try {
+    await api('/api/ai/vision/model', { method:'POST', body: JSON.stringify({ model }) })
+    await loadAll()
+    toast('Model vision berhasil diganti')
+  } catch (e) { toast(e.message, true) }
+})
+$('aiRefreshModels').addEventListener('click', async () => {
+  try {
+    const d = await api('/api/ai/models', { method: 'POST' })
+    state.aiModels = d.models || []
+    renderAI()
+    toast(`Daftar model diperbarui (${state.aiModels.length})`)
+  } catch (e) { toast(e.message, true) }
+})
+$('aiChangeModel').addEventListener('click', async () => {
+  const model = $('aiModelSelect').value
+  if (!model) return toast('Tidak ada model yang bisa dipilih.', true)
+  try {
+    await api('/api/ai/model', { method: 'POST', body: JSON.stringify({ model }) })
+    await loadAll()
+    toast('Model AI berhasil diganti')
+  } catch (e) { toast(e.message, true) }
+})
+$('aiManualModelBtn').addEventListener('click', async () => {
+  const model = $('aiManualModel').value.trim()
+  if (!model) return toast('Ketik ID model dulu.', true)
+  try {
+    await api('/api/ai/model', { method: 'POST', body: JSON.stringify({ model }) })
+    $('aiNotice').textContent = `Model ${model} berhasil dipakai.`
+    await loadAll()
+    toast('Model manual berhasil dipakai')
+  } catch (e) {
+    $('aiNotice').textContent = e.message
+    toast(e.message, true)
+  }
+})
+function renderVips() {
+  const list = $('vipList')
+  if (!list) return
+  list.innerHTML = state.vips.length
+    ? state.vips.map((v) => `<div class="row-actions" style="justify-content:space-between;padding:4px 0"><span>${esc(v.name || v.number)} <span class="muted tiny">${esc(v.number)}</span></span><span class="pill">VIP</span></div>`).join('')
+    : '<span class="muted">Belum ada user VIP.</span>'
+}
+
+$('vipForm').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  try {
+    await api('/api/vip', { method:'POST', body: JSON.stringify({
+      password: $('vipPassword').value,
+      number: $('vipNumber').value,
+      name: $('vipName').value,
+    }) })
+    $('vipPassword').value = ''
+    $('vipNumber').value = ''
+    $('vipName').value = ''
+    await loadAll()
+    toast('VIP berhasil didaftarkan')
+  } catch (err) { toast(err.message, true) }
+})
+
+$('btnRelink').addEventListener('click', async () => {
+  if (!confirm('Ganti nomor bot? Sesi lama akan diputuskan dan diarsipkan. Anda perlu memindai QR dengan nomor baru.')) return
+  try {
+    await api('/api/whatsapp/relink', { method: 'POST' })
+    await loadAll()
+    toast('Sesi lama diarsipkan. Pindai QR baru.')
+  } catch (e) { toast(e.message, true) }
+})
+$('btnDisconnect').addEventListener('click', async () => {
+  if (!confirm('Putuskan koneksi bot sekarang?')) return
+  try {
+    await api('/api/whatsapp/disconnect', { method: 'POST' })
+    await loadAll()
+    toast('Koneksi WhatsApp diputuskan')
+  } catch (e) { toast(e.message, true) }
+})
+
+fillSelects()
+loadAll().catch(e => toast(e.message, true))
+setInterval(() => { if (!document.hidden) loadAll().catch(() => {}) }, 12000)
