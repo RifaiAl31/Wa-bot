@@ -5,7 +5,7 @@ import { reply } from '../commands/context.js'
 import { roleOf } from '../services/roleService.js'
 import { featureService } from '../services/featureService.js'
 import { logger } from '../logger.js'
-import { validatePublicUrl } from './safeUrl.js'
+import { resolvePublicUrl } from './safeUrl.js'
 import { ytDlpExtractor } from './ytDlp.js'
 
 let extractor = ytDlpExtractor
@@ -49,7 +49,7 @@ export async function downloaderCommand(ctx, cmd, arg = '') {
   if (!allowedRequest(ctx.adminJid)) return reply(ctx, 'Terlalu banyak permintaan download. Coba lagi dalam 10 menit.')
 
   let url
-  try { url = validatePublicUrl(raw, platform.toLowerCase()) } catch (err) { return reply(ctx, err.message) }
+  try { url = await resolvePublicUrl(raw, platform.toLowerCase()) } catch (err) { return reply(ctx, err.message) }
 
   const tempDir = path.join(config.root, 'data', 'tmp', 'downloads')
   await fs.mkdir(tempDir, { recursive: true })

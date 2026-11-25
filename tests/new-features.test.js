@@ -10,7 +10,7 @@ testEnv('new-features')
 const { initDb } = await import('../src/db/index.js')
 const { groupService } = await import('../src/services/groups.js')
 const { handleMessage } = await import('../src/commands/router.js')
-const { validatePublicUrl } = await import('../src/downloaders/safeUrl.js')
+const { validatePublicUrl, resolvePublicUrl, setDnsResolver } = await import('../src/downloaders/safeUrl.js')
 const { setDownloaderExtractor } = await import('../src/downloaders/index.js')
 const { registerVip, isVip, setVipExpiry, removeVip } = await import('../src/services/vipService.js')
 
@@ -70,6 +70,16 @@ test('safeUrl menolak IP privat dan domain lain', () => {
   assert.throws(() => validatePublicUrl('https://localhost/x', 'tiktok'), /privat/)
   assert.throws(() => validatePublicUrl('https://example.com/x', 'tiktok'), /domain/)
   assert.equal(validatePublicUrl('https://www.tiktok.com/@user/video/123', 'tiktok').hostname, 'www.tiktok.com')
+})
+
+test('resolver DNS menolak domain publik yang mengarah ke IP privat', async () => {
+  await assert.rejects(
+    resolvePublicUrl('https://www.tiktok.com/@user/video/123', 'tiktok', async () => [{ address:'127.0.0.1' }]),
+    /privat/,
+  )
+  setDnsResolver(async () => [{ address:'13.224.0.1' }])
+  const ok = await resolvePublicUrl('https://www.tiktok.com/@user/video/123', 'tiktok')
+  assert.equal(ok.hostname, 'www.tiktok.com')
 })
 
 test('downloader mengirim file dan success box, watermark asli tidak dihapus', async () => {

@@ -17,9 +17,10 @@ export const ytDlpExtractor = {
     }
     const output = path.join(tempDir, `${platform}-%(id)s.%(ext)s`)
     const args = [
-      '--no-playlist', '--no-warnings', '--no-call-home',
-      '--socket-timeout', '20', '--retries', '2',
+      '--no-config', '--no-playlist', '--no-warnings', '--no-call-home',
+      '--no-cookies-from-browser', '--socket-timeout', '20', '--retries', '2',
       '--max-filesize', `${Math.max(1, Number(config.downloaderMaxMb) || 50)}M`,
+      '-f', 'best[ext=mp4]/best',
       '-o', output, '--print', 'after_move:filepath', url,
     ]
     const result = spawnSync('yt-dlp', args, {
