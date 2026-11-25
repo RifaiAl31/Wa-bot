@@ -21,6 +21,7 @@ import * as vipSession from '../services/vipSession.js'
 import { groupService } from '../services/groups.js'
 import { logActivity } from '../db/index.js'
 import { config, normalizeJid } from '../config.js'
+import { logger } from '../logger.js'
 import {
   dayName, weekName, timeName, groupLabel, shortJid, normalizeId,
   formatAnnouncementDetail, DAY_CHOICES,
@@ -99,6 +100,18 @@ async function requireAnnouncement(ctx, arg) {
   return row
 }
 
+async function identityAliases(ctx) {
+  const keys = new Set([normalizeJid(ctx.adminJid)])
+  try {
+    const contact = await ctx.sock?.getContact?.(ctx.adminJid)
+    for (const value of [contact?.jid, contact?.lid]) {
+      const key = normalizeJid(value)
+      if (key) keys.add(key)
+    }
+  } catch { /* kontak tidak ditemukan; pakai JID asal pesan */ }
+  return [...keys].filter(Boolean)
+}
+
 async function deletePasswordMessage(ctx) {
   // Baileys/izin grup belum tentu mengizinkan; gagal diabaikan.
   try { await ctx.sock.sendMessage(ctx.jid, { delete: ctx.messageKey }) } catch { /* abaikan */ }
@@ -107,9 +120,11 @@ async function deletePasswordMessage(ctx) {
 async function handlePrivateVipPassword(ctx, text) {
   const session = vipSession.getSession(ctx.adminJid)
   if (!session) {
+    logger.info(`VIP session missing or expired: ${normalizeJid(ctx.adminJid)}`)
     await reply(ctx, 'Sesi aktivasi tidak ditemukan atau sudah berakhir. Ketik /vip di chat pribadi untuk memulai lagi.')
     return
   }
+  logger.info(`VIP session validated: ${session.key}`)
   if (session.locked) {
     const minutes = Math.ceil((session.lockUntil - Date.now()) / 60000)
     await reply(ctx, `Terlalu banyak percobaan. Coba lagi dalam ${minutes} menit.`)
@@ -119,7 +134,9 @@ async function handlePrivateVipPassword(ctx, text) {
   const ok = verifyVipPassword(text)
   await deletePasswordMessage(ctx)
   if (ok) {
+    // Identitas yang diverifikasi adalah pengirim pesan password di private chat.
     registerVip(ctx.adminJid, ctx.adminJid)
+    logger.info(`VIP activation completed: ${normalizeJid(ctx.adminJid)}`)
     vipSession.clearSession(ctx.adminJid)
     await reply(ctx, [
       '✅ VIP ACTIVATED SUCCESSFULLY', '',
@@ -198,6 +215,9 @@ async function routeCommand(ctx, cmd, arg) {
         return reply(ctx, 'Akun Anda sudah terdaftar sebagai VIP.')
       }
       if (isGroup) {
+        // Sesi dibuat di grup agar bisa dilanjutkan di private chat. Idempoten:
+        // dua pesan /vip bersamaan tidak membuat dua sesi atau mereset attempts.
+        vipSession.startSession(ctx.adminJid, await identityAliases(ctx), ctx.jid)
         const botNumber = normalizeJid(ctx.bot?.status?.().botNumber || '')
         const link = botNumber
           ? `https://wa.me/${botNumber}?text=${encodeURIComponent('/vip')}`
@@ -218,7 +238,7 @@ async function routeCommand(ctx, cmd, arg) {
       if (session) {
         return reply(ctx, 'Sesi aktivasi masih aktif. Masukkan password VIP Anda atau ketik /cancel.')
       }
-      vipSession.startSession(ctx.adminJid)
+      vipSession.startSession(ctx.adminJid, await identityAliases(ctx), ctx.jid)
       return reply(ctx, [
         '🔐 VIP ACTIVATION', '',
         'Silakan masukkan password VIP Anda.', '',

@@ -160,6 +160,40 @@ CREATE TABLE IF NOT EXISTS vip_users (
   created_at TEXT NOT NULL
 );
 
+-- Sesi aktivasi VIP persisten. Ditulis dengan primary key angka agar group JID/LID
+-- dan private chat JID bisa dipetakan ke identitas yang sama setelah divalidasi.
+CREATE TABLE IF NOT EXISTS deployment_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  previous_commit TEXT,
+  new_commit TEXT,
+  status TEXT NOT NULL,
+  dependency_changed INTEGER NOT NULL DEFAULT 0,
+  backup_path TEXT,
+  health TEXT,
+  detail TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS service_state (
+  name TEXT PRIMARY KEY,
+  pid INTEGER,
+  status TEXT NOT NULL,
+  url TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS vip_activation_sessions (
+  user_key TEXT PRIMARY KEY,
+  user_jid TEXT,
+  alias_keys TEXT NOT NULL DEFAULT '',
+  chat_jid TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  lock_until_ms INTEGER NOT NULL DEFAULT 0,
+  expires_at_ms INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 INSERT OR IGNORE INTO ai_settings(key, value, updated_at) VALUES
   ('active_model_id', '', datetime('now')),
   ('active_model_name', '', datetime('now'));

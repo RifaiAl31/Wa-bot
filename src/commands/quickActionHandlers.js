@@ -10,15 +10,19 @@ import {
   createContext, buildChoices, getActiveContext, clearContext,
 } from './quickReplies.js'
 import { COMMAND_GROUPS } from './registry.js'
+import { shouldNotifyCooldown } from './cooldownNotice.js'
 
 const IMG_ACTIONS = ['🔍 Analisis Lebih Detail', '📝 Ambil Semua Teks (OCR)', '💡 Jelaskan Isi Gambar']
 const PDF_ACTIONS = ['📚 Ringkas Dokumen', '🔎 Cari Poin Penting', '❓ Tanya Isi PDF']
 const ASK_ACTIONS = ['📖 Jelaskan Lebih Detail', '💡 Berikan Contoh', '🔄 Sederhanakan Jawaban']
 const MENU_ACTIONS = ['📢 Pengumuman', '🤖 AI Assistant', '📄 Dokumen & Gambar']
 
-function guard(ctx) {
+function guard(ctx, feature) {
   const limit = checkLimits(ctx.adminJid, ctx.jid)
-  if (!limit.ok) { reply(ctx, limit.reason); return null }
+  if (!limit.ok) {
+    if (limit.kind !== 'cooldown' || shouldNotifyCooldown(ctx.adminJid, feature)) reply(ctx, limit.reason)
+    return null
+  }
   return limit
 }
 
@@ -45,7 +49,7 @@ function firstTitle(text) {
 export async function runAsk(ctx, question) {
   return withReaction(ctx, async () => {
     const result = await aiService.ask(question, ctx)
-    if (!result.ok) { await reply(ctx, result.message); return { ok: false } }
+    if (!result.ok) { if (result.message) await reply(ctx, result.message); return { ok: false } }
     const sent = await sendWithChoices(ctx, result.text, 'ask', { question, answer: result.text }, ASK_ACTIONS)
     return { ok: Boolean(sent?.ok) }
   })
@@ -53,7 +57,7 @@ export async function runAsk(ctx, question) {
 
 export async function runImageAnalysis(ctx, { buffer, mimetype, question }, deps = {}) {
   return withReaction(ctx, async () => {
-    const limit = guard(ctx)
+    const limit = guard(ctx, 'img')
     if (!limit) return { ok: false, reason: 'limit' }
     let model = null
     try {
@@ -77,7 +81,7 @@ export async function runImageAnalysis(ctx, { buffer, mimetype, question }, deps
 
 export async function runPdfAnalysis(ctx, { buffer, text, question, filename }, deps = {}) {
   return withReaction(ctx, async () => {
-    const limit = guard(ctx)
+    const limit = guard(ctx, 'pdf')
     if (!limit) return { ok: false, reason: 'limit' }
     let model = null
     try {

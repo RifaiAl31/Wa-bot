@@ -255,6 +255,9 @@ GEMINI_FREE_MODELS=gemini-2.0-flash,gemini-1.5-flash,gemini-1.5-flash-latest,gem
 GEMINI_VISION_MODELS=gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash
 GEMINI_VISION_MODEL=
 AI_COOLDOWN_SECONDS=20
+AI_COOLDOWN_NOTICE_SECONDS=20
+MESSAGE_DEDUPE_TTL_MS=300000
+ALLOW_MULTI_INSTANCE=
 AI_WINDOW_MINUTES=60
 AI_MAX_PER_USER=20
 AI_GLOBAL_MAX=60
@@ -292,6 +295,21 @@ Aktivasi VIP dilakukan lewat **private chat** dengan bot agar sandi tidak terlih
 - `/no vip @nomor` (Admin) mencabut status VIP langsung dari database. Perbandingan memakai hash SHA-256 + `timingSafeEqual`; sandi tidak pernah ditulis ke log, console, atau balasan.
 - **Admin terdaftar** (`ADMIN_NUMBERS` / tabel `admins`) bebas kuota dan cooldown AI.
 - **User biasa dan VIP** dibatasi `AI_MAX_PER_USER` (default 5) pertanyaan per `AI_WINDOW_MINUTES` (default 60 menit), dengan cooldown `AI_COOLDOWN_SECONDS`. VIP saat ini berfungsi sebagai penanda/user terdaftar; kuotanya tetap seperti user biasa.
+
+## Anti-duplikat, cooldown, dan sesi VIP
+
+- `messages.upsert` dideduplikasi berdasarkan message ID (`MESSAGE_DEDUPE_TTL_MS`, default 5 menit). Listener socket lama dilepas sebelum socket baru dibuat, dan hanya satu proses per database yang diizinkan (lock PID di `data/bot-*.pid`; `ALLOW_MULTI_INSTANCE=1` hanya untuk verifikasi dengan DB lain).
+- Notifikasi cooldown AI hanya dikirim sekali per pengguna per fitur dalam `AI_COOLDOWN_NOTICE_SECONDS` (default sama dengan `AI_COOLDOWN_SECONDS`). Semua fitur AI memakai satu sumber konfigurasi `AI_COOLDOWN_SECONDS`.
+- Sesi aktivasi VIP disimpan di tabel `vip_activation_sessions` (SQLite), tidak di memory. `/vip` di grup membuat sesi secara idempoten; private chat melanjutkan sesi yang sama. Alias JID/LID grup dipetakan ke JID private. Sesi bertahan setelah restart; kedaluwarsa mengikuti `VIP_SESSION_TTL_MS`.
+- Riwayat error dan aktivitas VIP ditulis ke `activity_logs`; password tidak pernah dicatat.
+
+## Backup dan rollback
+
+```
+npm run backup                       # backup data/bot.db ke data/backups/
+cp data/backups/<file>.db data/bot.db  # rollback (matikan bot dulu)
+npm start
+```
 
 ## PDF Reader, Image Analysis, dan pilihan cepat
 
@@ -371,7 +389,7 @@ Endpoint: `/api/health`, `/api/auth`, `/api/login`, `/api/logout`, `/api/status`
 | Tidak ada pengiriman ganda | `schedule_runs` mencegahnya; jangan menghapus baris ini manual |
 | Gagal kirim | Lihat `reason` di `/api/deliveries`; bot retry 3 kali (default) lalu mencatat kegagalan |
 
-Verifikasi yang bisa dilakukan tanpa ponsel: `npm test` (125 tes dengan fake socket, server OpenRouter & Gemini palsu, migrasi ID, endpoint web, dan generator gambar), `npm audit`, lalu `npm start` dan `curl` endpoint API. Proses QR scan dan pengiriman ke grup nyata **tidak bisa** diuji headlessly — perlu ponsel Anda.
+Verifikasi yang bisa dilakukan tanpa ponsel: `npm test` (136 tes dengan fake socket, server OpenRouter & Gemini palsu, migrasi ID, endpoint web, dan generator gambar), `npm audit`, lalu `npm start` dan `curl` endpoint API. Proses QR scan dan pengiriman ke grup nyata **tidak bisa** diuji headlessly — perlu ponsel Anda.
 
 ## Deploy ke platform proses permanen
 

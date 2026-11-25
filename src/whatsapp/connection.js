@@ -11,6 +11,7 @@ import { logger } from '../logger.js'
 import { isAdmin, isRegisteredAdmin } from '../services/adminAuth.js'
 import { groupService } from '../services/groups.js'
 import { isOwnMessage } from './sentCache.js'
+import { shouldProcessMessage } from './messageDedupe.js'
 
 export class WhatsAppBot {
   constructor({ onMessage } = {}) {
@@ -25,6 +26,9 @@ export class WhatsAppBot {
     this.startedAt = null
     this.botNumber = null
     this.relinking = false
+    this.connecting = false
+    this.connectPromise = null
+    this._eventHandlers = null
     this.relinkState = { status: 'idle', message: '', startedAt: null, archivedPath: null, error: null }
   }
 
@@ -50,9 +54,19 @@ export class WhatsAppBot {
     return archiveDir
   }
 
+  detachListeners() {
+    const current = this.sock
+    if (!current?.ev?.removeListener || !this._eventHandlers) return
+    for (const [event, handler] of Object.entries(this._eventHandlers)) {
+      try { current.ev.removeListener(event, handler) } catch { /* socket sudah mati */ }
+    }
+    this._eventHandlers = null
+  }
+
   async endCurrentSocket() {
     const current = this.sock
     this.sock = null
+    this.detachListeners()
     if (!current) return
     try { await current.logout?.() } catch { /* sudah terputus */ }
     try { current.end?.(new Error('BOT_ACCOUNT_SWITCH')) } catch { /* sudah terputus */ }
@@ -111,7 +125,24 @@ export class WhatsAppBot {
     await this.connect()
   }
 
+  safeHandler(handler) {
+    return (...args) => Promise.resolve(handler(...args)).catch((err) => {
+      logger.error('Event handler WhatsApp gagal:', err?.message || err)
+    })
+  }
+
   async connect() {
+    if (this.connectPromise) return this.connectPromise
+    if (this.connecting) return
+    this.connecting = true
+    this.connectPromise = this._connect().finally(() => {
+      this.connecting = false
+      this.connectPromise = null
+    })
+    return this.connectPromise
+  }
+
+  async _connect() {
     try {
       fs.mkdirSync(config.authDir, { recursive: true })
       const { state, saveCreds } = await useMultiFileAuthState(config.authDir)
@@ -136,23 +167,29 @@ export class WhatsAppBot {
         syncFullHistory: false,
         generateHighQualityLinkPreview: false,
       })
+      // Socket lama bisa masih hidup setelah putus; lepas listener agar tidak ada
+      // messages.upsert yang diproses dua kali oleh dua instance socket.
+      this.detachListeners()
       this.sock = sock
-
-      sock.ev.on('creds.update', saveCreds)
-      sock.ev.on('connection.update', (update) => this.onConnectionUpdate(update))
-      sock.ev.on('messages.upsert', (update) => this.onMessagesUpsert(update))
-      sock.ev.on('groups.upsert', (groups) => {
-        for (const g of groups || []) {
-          groupService.upsert(g.id, g.subject || g.name || null, g.participants || [])
-        }
-      })
-      sock.ev.on('group-participants.update', async (update) => {
-        if (!update?.id) return
-        try {
-          const metadata = await sock.groupMetadata(update.id)
-          groupService.upsert(update.id, metadata.subject || null, metadata.participants || [])
-        } catch { /* diabaikan, sink penuh saat open */ }
-      })
+      const handlers = {
+        'creds.update': saveCreds,
+        'connection.update': this.safeHandler((update) => this.onConnectionUpdate(update)),
+        'messages.upsert': this.safeHandler((update) => this.onMessagesUpsert(update)),
+        'groups.upsert': (groups) => {
+          for (const g of groups || []) {
+            groupService.upsert(g.id, g.subject || g.name || null, g.participants || [])
+          }
+        },
+        'group-participants.update': this.safeHandler(async (update) => {
+          if (!update?.id) return
+          try {
+            const metadata = await sock.groupMetadata(update.id)
+            groupService.upsert(update.id, metadata.subject || null, metadata.participants || [])
+          } catch { /* diabaikan, sink penuh saat open */ }
+        }),
+      }
+      this._eventHandlers = handlers
+      for (const [event, handler] of Object.entries(handlers)) sock.ev.on(event, handler)
     } catch (err) {
       logger.error('Gagal membuat koneksi WhatsApp:', err.message)
       this.scheduleReconnect()
@@ -232,7 +269,7 @@ export class WhatsAppBot {
     this.reconnecting = true
     this.reconnectAttempts += 1
     const delay = Math.min(30_000, 1000 * (2 ** Math.min(this.reconnectAttempts - 1, 5)))
-    logger.info(`Mencoba ulang koneksi dalam ${delay / 1000} detik (percobaan ${this.reconnectAttempts})`)
+    logger.info(`WhatsApp reconnect: mencoba ulang dalam ${delay / 1000} detik (percobaan ${this.reconnectAttempts})`)
     setTimeout(async () => {
       this.reconnecting = false
       await this.connect()
@@ -243,6 +280,9 @@ export class WhatsAppBot {
     if (update.type !== 'notify') return
     for (const msg of update.messages || []) {
       try {
+        // Pesan yang dikirim akun bot sendiri tidak pernah boleh memicu command.
+        if (msg.key?.fromMe) continue
+        if (!shouldProcessMessage(msg)) continue
         const jid = msg.key?.remoteJid
         if (!jid || jid === 'status@broadcast' || jid.endsWith('@broadcast')) continue
         const isGroup = jid.endsWith('@g.us')
@@ -251,8 +291,6 @@ export class WhatsAppBot {
         if (!text) continue
         const sender = msg.key?.participant || msg.key?.remoteJid
         if (!sender) continue
-        if (msg.key?.fromMe && !isAdmin(sender)) continue
-
         // Pastikan grup dikenal (misal bot baru masuk).
         if (isGroup && !groupService.get(jid)) groupService.upsert(jid, 'Grup WhatsApp', 0)
 

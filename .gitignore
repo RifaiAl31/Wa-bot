@@ -3,3 +3,14 @@ data/
 .env
 *.log
 .DS_Store
+*.pid
+*.pem
+*.key
+id_ed25519*
+id_rsa*
+data/web-secret
+deploy.key
+cloudflared
+cloudflared-*.log
+.env.*
+!.env.example

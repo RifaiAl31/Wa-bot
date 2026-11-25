@@ -1,4 +1,5 @@
 import express from 'express'
+import { spawn } from 'node:child_process'
 import multer from 'multer'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -13,13 +14,16 @@ import { deliverAnnouncement } from '../services/delivery.js'
 import { addAdmin, listAdmins, deactivateAdmin } from '../services/adminAuth.js'
 import { extractDocument, allowedExtensions } from '../services/documentService.js'
 import {
-  requireWrite, requireWeb, loginHandler, logoutHandler, authInfo,
+  requireWrite, requireWeb, requireManage, loginHandler, logoutHandler, authInfo, audit,
 } from './auth.js'
 import { logger } from '../logger.js'
 import { parseDay, parseWeek, parseTime } from '../utils/format.js'
 import { aiService } from '../ai/service.js'
 import * as modelConfig from '../ai/modelConfig.js'
 import { verifyVipPassword, registerVip, listVips } from '../services/vipService.js'
+import * as processManager from '../system/processManager.js'
+import * as deployService from '../system/deployService.js'
+import * as backupService from '../system/backupService.js'
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -295,6 +299,67 @@ export function createApp({ bot, scheduler }) {
       logger.error('API send error:', err.message)
       res.status(500).json({ error: err.message })
     }
+  })
+
+  // --- SYSTEM / DEPLOYMENT (selalu butuh login admin) ---
+  app.get('/api/system/status', requireManage, (_req, res) => {
+    res.json({ ...processManager.statusAll(), git: deployService.status() })
+  })
+  app.post('/api/system/check-update', requireManage, (_req, res) => {
+    res.json(deployService.checkUpdate())
+  })
+  app.post('/api/system/deploy', requireManage, (req, res) => {
+    const allowDirty = req.body?.allowDirty === true
+    audit(req, 'deploy_requested', allowDirty ? 'allowDirty' : '')
+    const result = deployService.deploy({ allowDirty })
+    res.json(result)
+    if (result.ok && result.status === 'restarting' && process.env.NODE_ENV !== 'test') {
+      setTimeout(() => process.exit(0), 500)
+    }
+  })
+  app.post('/api/system/restart-bot', requireManage, (req, res) => {
+    audit(req, 'bot_restart', '')
+    const result = processManager.scheduleBotRestart()
+    res.json(result)
+    if (process.env.NODE_ENV !== 'test') setTimeout(() => process.exit(0), 500)
+  })
+  app.post('/api/system/restart-tunnel', requireManage, (req, res) => {
+    audit(req, 'tunnel_restart', '')
+    res.json(processManager.restartTunnel())
+  })
+  app.post('/api/system/rollback', requireManage, (req, res) => {
+    const commit = String(req.body?.commit || '').trim() || null
+    if (commit && !/^[0-9a-f]{7,40}$/i.test(commit)) return res.status(400).json({ error: 'Commit tidak valid.' })
+    audit(req, 'rollback_requested', commit || 'auto')
+    try { res.json(deployService.rollback({ commit, allowDirty: req.body?.allowDirty === true })) }
+    catch (err) { res.status(400).json({ error: err.message }) }
+  })
+  app.get('/api/system/history', requireManage, (req, res) => {
+    res.json({ history: deployService.history(req.query.limit) })
+  })
+  app.get('/api/system/backup', requireManage, (req, res) => {
+    audit(req, 'backup_created', '')
+    try { res.json(backupService.backupNow()) }
+    catch (err) { res.status(500).json({ error: err.message }) }
+  })
+  app.get('/api/system/backups', requireManage, (_req, res) => res.json({ backups: backupService.listBackups() }))
+  app.post('/api/system/restore', requireManage, (req, res) => {
+    const name = String(req.body?.name || '')
+    if (req.body?.confirm !== true) return res.status(400).json({ error: 'Konfirmasi restore diperlukan.' })
+    try {
+      const source = backupService.restoreBackup(name)
+      audit(req, 'restore_requested', name)
+      const child = spawn(process.execPath, ['scripts/restore.js', name], {
+        cwd: config.root, detached: true, stdio: 'ignore', env: { ...process.env },
+      })
+      child.unref()
+      res.json({ ok: true, source, scheduled: true })
+      if (process.env.NODE_ENV !== 'test') setTimeout(() => process.exit(0), 500)
+    } catch (err) { res.status(400).json({ error: err.message }) }
+  })
+  app.get('/api/system/logs', requireManage, (req, res) => {
+    try { res.json({ lines: processManager.readLog(req.query.name || 'bot', req.query.lines) }) }
+    catch (err) { res.status(400).json({ error: err.message }) }
   })
 
   const dashDir = path.resolve(config.root, 'dashboard')

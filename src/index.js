@@ -8,6 +8,7 @@ import { handleMessage } from './commands/router.js'
 import { WhatsAppBot } from './whatsapp/connection.js'
 import { Scheduler } from './services/scheduler.js'
 import { createApp } from './api/routes.js'
+import { ensureSingleInstance } from './whatsapp/singleInstance.js'
 
 // libsignal (dependensi Baileys) mencetak "Closing session: SessionEntry {...}"
 // lewat console.info. Ini normal, bukan error — diamkan agar log bot tetap bersih.
@@ -18,6 +19,7 @@ console.info = (...args) => {
 }
 
 initDb()
+try { ensureSingleInstance() } catch (err) { logger.error(err.message); process.exit(1) }
 try {
   const result = migrateAnnouncementIds()
   if (result.migrated) logger.info(`ID lama dimigrasikan ke format baru (${result.migrated} pengumuman).`)

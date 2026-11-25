@@ -11,7 +11,11 @@
     "add-admin": "node scripts/add-admin.js",
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "deploy": "node scripts/deploy-cli.js deploy",
+    "deploy:check": "node scripts/deploy-cli.js check",
+    "process": "node scripts/process-cli.js",
+    "set-admin-password": "node scripts/set-admin-password.js"
   },
   "engines": {
     "node": ">=20"

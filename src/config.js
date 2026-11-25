@@ -27,6 +27,8 @@ export const config = {
   vipSessionTtlMs: Number(process.env.VIP_SESSION_TTL_MS || 2 * 60 * 1000),
   vipMaxAttempts: Number(process.env.VIP_MAX_ATTEMPTS || 3),
   vipLockMs: Number(process.env.VIP_LOCK_MS || 5 * 60 * 1000),
+  messageDedupeTtlMs: Number(process.env.MESSAGE_DEDUPE_TTL_MS || 5 * 60 * 1000),
+  cooldownNoticeMs: Number(process.env.AI_COOLDOWN_NOTICE_SECONDS || 20) * 1000,
 
   // AI Assistant (OpenRouter). API key TIDAK pernah disimpan di database.
   // Penyedia AI: openrouter atau gemini. Pilih otomatis dari key yang tersedia.
@@ -60,6 +62,13 @@ export const config = {
   backupDir: resolveFromRoot(process.env.BACKUP_DIR, './data/backups'),
   timezone: process.env.TZ || 'Asia/Jakarta',
   logLevel: process.env.LOG_LEVEL || 'info',
+  webSecretFile: resolveFromRoot(process.env.WEB_SECRET_FILE, './data/web-secret'),
+  cookieSecure: process.env.COOKIE_SECURE === 'true',
+  deployBranch: process.env.DEPLOY_BRANCH || 'main',
+  deployHealthTimeoutMs: Number(process.env.DEPLOY_HEALTH_TIMEOUT_MS || 120000),
+  tunnelPort: Number(process.env.TUNNEL_PORT || process.env.PORT || 3000),
+  tunnelCommand: process.env.TUNNEL_COMMAND || '',
+  tunnelName: process.env.TUNNEL_NAME || '',
   retryLimit: Number(process.env.RETRY_LIMIT || 2),
   retryDelayMs: Number(process.env.RETRY_DELAY_MS || 1500),
   adminNumbers: (process.env.ADMIN_NUMBERS || '')

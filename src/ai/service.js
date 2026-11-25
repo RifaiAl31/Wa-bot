@@ -4,6 +4,7 @@ import { logger } from '../logger.js'
 import { fetchModels, toFreeModels, askModel, AIError } from './client.js'
 import { checkLimits, recordUsage } from './limits.js'
 import * as modelConfig from './modelConfig.js'
+import { shouldNotifyCooldown } from '../commands/cooldownNotice.js'
 
 let cache = { at: 0, models: null }
 const contexts = new Map()
@@ -40,7 +41,8 @@ export const aiService = {
     const limit = checkLimits(userJid, groupJid)
     if (!limit.ok) {
       recordUsage({ userJid, groupJid, command: '/ask', status: 'blocked', reason: limit.reason, windowStart: limit.windowStart })
-      return { ok: false, message: limit.reason, reason: limit.reason }
+      const silent = limit.kind === 'cooldown' && !shouldNotifyCooldown(userJid, 'ask')
+      return { ok: false, message: silent ? null : limit.reason, reason: limit.reason, silent }
     }
     const q = String(question || '').trim()
     if (!q) return { ok: false, message: 'Pertanyaan kosong. Contoh: /ask Apa itu AI Agent?' }

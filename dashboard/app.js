@@ -2,10 +2,18 @@ const DAYS = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu']
 const WEEKS = ['Setiap minggu','Minggu ke-1','Minggu ke-2','Minggu ke-3','Minggu ke-4','Minggu ke-5']
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
-const state = { view:'dashboard', auth:null, status:null, announcements:[], groups:[], schedules:[], deliveries:[], activity:[], settings:null, aiStatus:null, aiModels:[], aiVisionModels:[], aiUsage:null, whatsapp:null, vips:[] }
+const state = { view:'dashboard', auth:null, system:null, deployHistory:[], backups:[], status:null, announcements:[], groups:[], schedules:[], deliveries:[], activity:[], settings:null, aiStatus:null, aiModels:[], aiVisionModels:[], aiUsage:null, whatsapp:null, vips:[] }
+
+function csrfToken() {
+  const match = document.cookie.match(/(?:^|;\s*)wa_csrf=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : ''
+}
 
 async function api(path, options = {}) {
-  const res = await fetch(path, { headers:{ 'Content-Type':'application/json', ...(options.headers||{}) }, ...options })
+  const method = options.method || 'GET'
+  const headers = { 'Content-Type':'application/json', ...(options.headers||{}) }
+  if (!['GET','HEAD'].includes(method)) headers['X-CSRF-Token'] = csrfToken()
+  const res = await fetch(path, { headers, ...options })
   let data = {}
   try { data = await res.json() } catch { data = {} }
   if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`)
@@ -39,12 +47,56 @@ async function loadAll() {
   state.aiUsage = aiUsage?.__error ? null : aiUsage
   state.whatsapp = whatsapp?.__error ? null : whatsapp
   state.vips = vips?.vips || []
+  await loadSystem()
   render()
 }
 
 function render() {
   renderTopbar(); renderDashboard(); renderAnnouncements(); renderSchedules()
-  renderGroups(); renderHistory(); renderSettings(); renderAI(); renderBotAccount(); renderVips()
+  renderGroups(); renderHistory(); renderSettings(); renderAI(); renderBotAccount(); renderVips(); renderSystem()
+}
+
+async function loadSystem() {
+  if (!state.auth?.configured) return
+  const [sys, hist, backs] = await Promise.all([
+    api('/api/system/status').catch(() => null),
+    api('/api/system/history').catch(() => null),
+    api('/api/system/backups').catch(() => null),
+  ])
+  state.system = sys
+  state.deployHistory = hist?.history || []
+  state.backups = backs?.backups || []
+}
+
+function renderSystem() {
+  const s = state.system
+  const pill = $('accessPill')
+  pill.textContent = state.auth?.configured ? (state.auth.authenticated ? 'Login admin' : 'Perlu login') : 'Akses umum'
+  $('btnLogin').hidden = !state.auth?.configured || Boolean(state.auth.authenticated)
+  if (!s) {
+    $('sysBot').textContent = state.auth?.configured ? 'Login dulu' : 'Tersedia setelah login'
+    return
+  }
+  $('sysBot').textContent = s.bot?.running ? 'BERJALAN' : 'MATI'
+  $('sysBotNote').textContent = `Dashboard ${s.dashboard?.url || '-'} · uptime ${s.uptimeSeconds}s`
+  $('sysTunnel').textContent = s.tunnel?.running ? 'AKTIF' : 'MATI'
+  $('sysTunnelUrl').innerHTML = s.tunnel?.url ? `<a href="${esc(s.tunnel.url)}" target="_blank" rel="noreferrer">${esc(s.tunnel.url)}</a>` : 'Belum ada URL quick tunnel'
+  $('sysCommit').textContent = (s.git?.head || '-').slice(0, 10)
+  $('sysBranch').textContent = `${s.git?.branch || '-'} · ${s.git?.subject || ''}`
+  $('sysUpdate').textContent = s.git?.allowed ? 'Branch diizinkan' : `Branch ${s.git?.branch} tidak diizinkan`
+  const last = s.git?.lastDeployment
+  $('sysLastDeploy').textContent = last ? `${last.status} · ${last.created_at}` : 'Belum pernah deploy'
+  $('sysInfo').innerHTML = `Node ${esc(s.node)} · ${esc(s.platform)}/${esc(s.arch)}<br>Commit: ${esc(s.git?.head || '-')}<br>Branch produksi: ${esc(s.git?.allowedBranch || '-')}`
+  $('deployHistory').innerHTML = state.deployHistory.length
+    ? state.deployHistory.map(d => `<div class="row-actions" style="justify-content:space-between;padding:4px 0"><span>${esc(d.created_at)} <span class="pill">${esc(d.status)}</span></span><span class="muted tiny">${esc((d.new_commit||'').slice(0,7))}${d.dependency_changed ? ' · dependency' : ''}</span></div>`).join('')
+    : '<span class="muted">Belum ada riwayat deployment.</span>'
+  const select = $('backupSelect')
+  const previous = select.value
+  select.innerHTML = state.backups.length
+    ? state.backups.map(b => `<option value="${esc(b.name)}">${esc(b.name)} (${Math.round(b.bytes/1024)} KB)</option>`).join('')
+    : '<option value="">Tidak ada backup</option>'
+  if ([...select.options].some(o => o.value === previous)) select.value = previous
+  $('backupList').textContent = state.backups.length ? `${state.backups.length} backup tersedia` : 'Belum ada backup.'
 }
 
 function renderTopbar() {
@@ -129,7 +181,7 @@ function switchView(view) {
   state.view = view
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view))
   document.querySelectorAll('.view').forEach(v => { v.hidden = v.id !== `view-${view}` })
-  const titles = { dashboard:['Ringkasan','Pantau koneksi dan pengiriman bot'], announcements:['Pengumuman','Buat, edit, dan kelola semua pengumuman'], import:['Import Dokumen','Ubah PDF/DOCX menjadi draf pesan teks'], schedules:['Jadwal','Atur hari, minggu, dan jam pengiriman'], groups:['Grup','Kelola grup tujuan pengumuman'], ai:['AI Assistant','Model gratis OpenRouter dan batas pemakaian'], history:['Riwayat','Log pengiriman dan aktivitas'], settings:['Pengaturan','Nomor bot, admin, scheduler, dan cadangan'] }
+  const titles = { dashboard:['Ringkasan','Pantau koneksi dan pengiriman bot'], announcements:['Pengumuman','Buat, edit, dan kelola semua pengumuman'], import:['Import Dokumen','Ubah PDF/DOCX menjadi draf pesan teks'], schedules:['Jadwal','Atur hari, minggu, dan jam pengiriman'], groups:['Grup','Kelola grup tujuan pengumuman'], ai:['AI Assistant','Model gratis OpenRouter dan batas pemakaian'], history:['Riwayat','Log pengiriman dan aktivitas'], settings:['Pengaturan','Nomor bot, admin, scheduler, dan cadangan'], system:['System Management','Deploy, backup, proses, dan monitoring server'] }
   $('pageTitle').textContent = titles[view][0]
   $('pageSubtitle').textContent = titles[view][1]
 }
@@ -466,6 +518,64 @@ $('btnDisconnect').addEventListener('click', async () => {
     await loadAll()
     toast('Koneksi WhatsApp diputuskan')
   } catch (e) { toast(e.message, true) }
+})
+
+// --- System management bindings ---
+$('btnLogin').addEventListener('click', () => { $('loginModal').hidden = false })
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  try {
+    const res = await api('/api/login', { method:'POST', body: JSON.stringify({ password: $('loginPassword').value }) })
+    $('loginPassword').value = ''
+    $('loginModal').hidden = true
+    toast(`Login berhasil. CSRF: ${res.csrf ? 'aktif' : '-'}`)
+    await loadAll()
+  } catch (err) { toast(err.message, true) }
+})
+
+async function systemAction(path, body = {}, successMsg = 'Berhasil') {
+  try {
+    const data = await api(path, { method:'POST', body: JSON.stringify(body) })
+    $('sysNotice').textContent = JSON.stringify(data).slice(0, 500)
+    toast(data.error || successMsg, Boolean(data.error))
+    await loadAll()
+    return data
+  } catch (err) { toast(err.message, true); return null }
+}
+
+$('btnCheckUpdate').addEventListener('click', () => systemAction('/api/system/check-update', {}, 'Pemeriksaan selesai'))
+$('btnDeploy').addEventListener('click', async () => {
+  if (!confirm('Deploy update dari GitHub? Bot akan restart dan health check dijalankan.')) return
+  await systemAction('/api/system/deploy', {}, 'Deploy dimulai')
+})
+$('btnRestartBot').addEventListener('click', async () => {
+  if (!confirm('Restart bot sekarang?')) return
+  await systemAction('/api/system/restart-bot', {}, 'Restart dijadwalkan')
+})
+$('btnRestartTunnel').addEventListener('click', () => systemAction('/api/system/restart-tunnel', {}, 'Tunnel direstart'))
+$('btnRollback').addEventListener('click', async () => {
+  const commit = $('rollbackCommit').value.trim()
+  if (!confirm(`Rollback source code${commit ? ` ke ${commit}` : ' ke commit sebelumnya'}? Database tidak diubah.`)) return
+  await systemAction('/api/system/rollback', { commit }, 'Rollback selesai')
+})
+$('btnBackupNow').addEventListener('click', async () => {
+  try {
+    const data = await api('/api/system/backup')
+    toast(`Backup dibuat: ${data.dbPath || 'database'}`)
+    await loadAll()
+  } catch (err) { toast(err.message, true) }
+})
+$('btnRestore').addEventListener('click', async () => {
+  const name = $('backupSelect').value
+  if (!name) return toast('Pilih backup dulu.', true)
+  if (!confirm(`Restore database dari ${name}? Bot akan restart. Session WhatsApp tidak diubah.`)) return
+  await systemAction('/api/system/restore', { name, confirm:true }, 'Restore dijadwalkan')
+})
+$('btnLoadLog').addEventListener('click', async () => {
+  try {
+    const data = await api(`/api/system/logs?name=${encodeURIComponent($('logSelect').value)}&lines=200`)
+    $('logView').textContent = (data.lines || []).join('\n') || '(kosong)'
+  } catch (err) { toast(err.message, true) }
 })
 
 fillSelects()
