@@ -406,4 +406,4 @@ Verifikasi setelah deploy: `GET /api/health`, `GET /api/status` (harus `connecte
 
 ## Lisensi
 
-MIT. Dibuat untuk penggunaan komunitas; WhatsApp dan nama merek terkait adalah milik Meta.
+MIT. Dibuat untuk penggunaan komunitas; WhatsApp dan nama merek terkait adalah milik Meta.# Wa-bot
