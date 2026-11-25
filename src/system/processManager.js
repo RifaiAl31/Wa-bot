@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { config } from '../config.js'
 import { logger } from '../logger.js'
 
@@ -58,6 +58,10 @@ function launch(name, file, command, args) {
   ensureDirs()
   const existing = readPid(file)
   if (existing && alive(existing)) return { ok: false, error: `${name} sudah berjalan (PID ${existing}).`, pid: existing }
+  const probe = spawnSync(command, ['--version'], { cwd: config.root, timeout: 8000, encoding: 'utf8' })
+  if (probe.error?.code === 'ENOENT') {
+    return { ok: false, error: `${command} tidak ditemukan. Install cloudflared atau sesuaikan TUNNEL_COMMAND.` }
+  }
   const out = fs.openSync(path.join(logDir, `${name}.log`), 'a')
   const err = fs.openSync(path.join(logDir, `${name}.error.log`), 'a')
   const child = spawn(command, args, {
@@ -69,6 +73,7 @@ function launch(name, file, command, args) {
   child.on('error', (e) => logger.error(`Gagal menjalankan ${name}:`, e.message))
   child.unref()
   fs.closeSync(out); fs.closeSync(err)
+  if (!child.pid) return { ok: false, error: `Gagal menjalankan ${name}.` }
   writePid(file, child.pid)
   logger.info(`${name} dimulai (PID ${child.pid})`)
   return { ok: true, pid: child.pid }

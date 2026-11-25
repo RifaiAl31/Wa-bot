@@ -44,6 +44,8 @@ tests/                    pengujian dengan fake socket
 data/                     DB, sesi auth, QR, backup (di-gitignore)
 ```
 
+Panduan lengkap GitHub auto deployment, Termux, process manager, tunnel, backup, dan rollback: [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Instalasi
 
 Butuh **Node.js >= 20** (direkomendasikan Node 22/24).
