@@ -10,7 +10,8 @@ Bot WhatsApp berbasis **Baileys** untuk mengelola dan mengirim pengumuman teks d
 
 ## Fitur
 
-- `.menu` mengirim kartu ringkasan visual (role, mode, runtime, cuaca, waktu) lalu daftar kategori/command sesuai role; 3 shortcut angka tetap tersedia.
+- `.menu` menampilkan kategori ringkas; `.menu <kategori>` membuka daftar command aktif dari registry. Shortcut grup `1/2/3` tetap tersedia pada menu utama.
+- `.menu game` menyediakan kuis lokal melalui `.quiz [kategori]` dan `.qa <A-D>`; sesi dipisah per grup/chat dan pemain, tanpa taruhan.
 - Role-based access (ADMIN/USER/VIP), group access control, VIP masa aktif, dan `.rvo` untuk foto biasa yang eksplisit diizinkan.
 - Downloader publik `.tiktok`/`.instagram` modular via `yt-dlp` (opsional) dengan SSRF guard, rate limit, dan batas ukuran.
 
@@ -27,6 +28,7 @@ Bot WhatsApp berbasis **Baileys** untuk mengelola dan mengirim pengumuman teks d
 - **Mode cepat** `.set <teks>`: teks yang ditempel langsung tersimpan apa adanya tanpa wizard.
 - **Pengiriman manual** `.send A1` (alias `.kirim`), ID lama `ANN-001`/`AN001` tetap diterima setelah migrasi.
 - Generator Canvas lokal: `.iqc`, `.iqc2`, `.iqc5`, `.iqcdark`, `.iqcpink`, `.iqcpinkv2`, `.iqcmerah`, `.tqc`, `.tiktokchat`, `.wq`, `.iqcwin`, dan `.ytcomment`. Varian warna adalah adaptasi lokal, bukan replika pixel-perfect backend upstream. Mockup Instagram tersedia lewat `.igqc`, `.igpost`, `.igstory`, `.igprofile`, `.igdm`, `.ignote`. Hasil diberi penanda simulasi, bukan screenshot atau komentar asli.
+- Sticker maker `.sticker`/`.s`, `.ttp`, `.attp`, `.brat`, `.qc`, `.emojimix`, dan `.toimg` tersedia di grup terdaftar maupun private chat; reply foto atau kirim foto dengan caption `.sticker`. `.pack` mengatur metadata pack di grup. Konversi animasi memerlukan FFmpeg.
 - AI Assistant lewat OpenRouter menggunakan **model gratis saja**, dengan batas pemakaian dan reaction ⏳→✅/❌.
 - Panel web lengkap: CRUD pengumuman, import PDF/DOCX/TXT/MD menjadi draf teks, kelola jadwal/grup/admin, riwayat, backup.
 - Teks saja yang dikirim ke grup — tidak ada gambar, video, poster, atau lampiran. Dokumen hanya dipakai sebagai sumber teks.
@@ -145,8 +147,10 @@ Perintah umum diketik di grup atau private chat sesuai izin. Prefix resmi adalah
 | `.model NOMOR` | Mengganti model gratis teks (khusus admin terdaftar) |
 | Dashboard → AI Assistant → KONFIGURASI MODEL VISION | Memilih model vision (OpenRouter/Gemini; Gemini hanya untuk VIP) |
 | `.status` | Status koneksi bot |
-| `.menu` | Daftar seluruh perintah + cara pakai (satu pesan) |
-| `.help` | Daftar perintah |
+| `.menu` | Daftar kategori |
+| `.menu umum` | Command umum dan informasi bot |
+| `.menu <kategori>` | Daftar command aktif dalam kategori |
+| `.help` | Sama dengan `.menu`; dapat menerima nama kategori |
 
 ### Alur `.set` (contoh)
 
@@ -222,9 +226,9 @@ Reaction baru dikirim ke `message.key` yang sama sehingga menggantikan reaction 
 
 ## Perintah .menu
 
-Ketik `.menu` **satu kali** saat bot aktif. Bot mengirim seluruh daftar secara otomatis dalam **beberapa pesan berurutan**, sekitar 6 command per pesan, dengan jeda singkat. Tidak perlu mengetik `.menu 2`, `.menu 3`, dan seterusnya, dan tidak ada pesan duplikat.
+Ketik `.menu` untuk kategori saja, lalu `.menu islam`, `.menu sticker`, atau kategori lain untuk melihat command-nya. Kategori tidak dikenal membalas dengan daftar yang valid. `.help` menerima format yang sama.
 
-Daftar dibangkitkan dari metadata `src/commands/registry.js` dan disaring menurut konfigurasi AI, konteks private/grup, serta role admin/VIP. Admin melihat command administrasi; pengguna lain tidak melihat command yang tak diizinkan.
+Daftar kategori dan command dibangkitkan dari metadata `src/commands/registry.js` dan disaring menurut konfigurasi AI, konteks private/grup, serta role admin/VIP. Menu hanya menampilkan fitur aktif. Shortcut grup setelah menu utama: `1` menjalankan `.list`, `2` menjalankan `.ask`, dan `3` menjalankan `.user`.
 
 ## Format ID pengumuman
 

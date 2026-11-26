@@ -4,11 +4,20 @@
 
 Semua command resmi memakai prefix titik. Prefix lama tetap diterima sementara di grup untuk kompatibilitas; private chat hanya menerima command yang diawali titik. Menu private hanya menampilkan command yang diizinkan di private chat. Prefix lama tidak ditampilkan pada menu. Daftar menu dibuat dari metadata command di `src/commands/registry.js`; fitur berizin admin/VIP dan fitur AI tanpa API aktif disesuaikan dengan akses dan konfigurasi.
 
-## 👤 Menu utama
+## Menu bertingkat
+
+Ketik `.menu` untuk melihat kategori, lalu `.menu <kategori>` untuk membukanya. Kategori disaring menurut role, chat scope, konfigurasi AI, dan fitur yang aktif. `.help` menerima format yang sama. Gunakan `.menu` untuk kembali.
+
+Kategori: `.menu umum`, `.menu pengumuman`, `.menu jadwal`, `.menu grup`, `.menu vip`, `.menu ai`, `.menu islam`, `.menu instagram`, `.menu sticker`, `.menu maker`, `.menu game`, `.menu gambar`, `.menu utilitas`.
+
+Shortcut grup tetap tersedia setelah menu kategori utama: `1` menjalankan `.list`, `2` menjalankan `.ask`, dan `3` menjalankan `.user`.
+
+## 👤 Menu umum
 
 | Command | Fungsi |
 |---|---|
-| `.menu` | Kartu ringkasan dan menu lengkap |
+| `.menu` | Daftar kategori menu |
+| `.menu umum` | Informasi umum dan command bot |
 | `.help` | Menu bantuan |
 | `.user` | JID, nomor, role, dan status akun |
 | `.vip` | Informasi atau aktivasi VIP |
@@ -52,6 +61,8 @@ Command pengelolaan daftar grup hanya untuk admin bot terdaftar. Bot tidak perlu
 | `.daftargrup N` | Mendaftarkan grup nomor N (admin) |
 | `.nondaftargrup N` | Mencabut pendaftaran grup N (admin) |
 
+Fitur moderasi seperti antilink, antispam, antitoxic, mute, welcome/goodbye, dan promote/demote notification belum tersedia sebagai command aktif, jadi tidak ditampilkan.
+
 ## 👑 VIP
 
 | Command | Fungsi |
@@ -89,11 +100,22 @@ Alias yang tetap didukung: `.ayatpilihan`, `.alquran`, `.quran`, `.murrotal`, `.
 
 ## 🧷 Sticker
 
-`.sticker`, `.s`, `.ttp`, `.attp`, `.brat`, `.qc`, `.toimg`, `.emojimix`, `.pack`
+`.sticker` (kirim sebagai caption foto atau balas foto dengan command), `.s`, `.ttp`, `.attp`, `.brat`, `.qc`, `.toimg`, `.emojimix`, `.pack`
+
+Command pembuat stiker berprefix titik tersedia di grup terdaftar dan private chat. Balas gambar dengan `.sticker`, atau kirim gambar dengan caption `.sticker`. Default metadata stiker: pack `LUX BOT`, author `Dev By Rifai`. Stiker animasi membutuhkan FFmpeg; `.attp` tetap mengirim versi statis jika FFmpeg tidak tersedia.
 
 ## 🎨 Maker
 
 `.logo3d`, `.logogold`
+
+## 🎮 Game
+
+| Command | Fungsi |
+|---|---|
+| `.quiz [kategori]` | Memulai kuis pilihan ganda; kategori: `umum`, `geografi`, `sains`, `sejarah`, `teknologi` |
+| `.qa <A-D>` | Menjawab kuis aktif |
+
+Alias: `.kuis` untuk `.quiz`; `.jawabquiz` dan `.jwbquiz` untuk `.qa`. Sesi dipisah menurut chat dan pengirim, hanya satu sesi aktif per pemain, satu kesempatan menjawab, dan berakhir setelah tiga menit. Pertanyaan yang dipakai ditulis lokal; game tidak memakai taruhan atau hadiah bernilai.
 
 ## 🧠 AI writing & coding
 

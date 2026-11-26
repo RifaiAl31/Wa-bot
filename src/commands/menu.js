@@ -2,7 +2,6 @@ import { createCanvas } from '@napi-rs/canvas'
 import { COMMAND_GROUPS, buildMenuText, commandIsVisible, normalizeCommand } from './registry.js'
 import { roleOf } from '../services/roleService.js'
 import { featureService } from '../services/featureService.js'
-import { getCurrentWeather } from '../services/weatherService.js'
 import { config, normalizeJid } from '../config.js'
 import { fillRoundRect, fitText, FONT } from '../images/engine.js'
 
@@ -129,16 +128,16 @@ function renderMenuCard(menu) {
   return canvas.toBuffer('image/png')
 }
 
-export async function buildPersonalMenu(ctx) {
+export async function buildPersonalMenu(ctx, category = '') {
   const role = roleOf(ctx.adminJid)
   const clock = jakartaClock()
-  const weather = await getCurrentWeather()
   const features = featureService.countActiveFeatures(role)
   const menuOptions = {
     admin: role === 'ADMIN',
     vip: ['ADMIN', 'VIP'].includes(role),
     privateChat: !ctx.isGroup,
     privateCommands: config.privateDotCommands.map(normalizeCommand).filter(Boolean),
+    groupChat: Boolean(ctx.isGroup),
   }
   const commands = countCommands(role, menuOptions)
   const account = 'ACTIVE'
@@ -154,23 +153,15 @@ export async function buildPersonalMenu(ctx) {
     const minutes = Math.floor((total % 3600) / 60)
     return days ? `${days} hari ${hours} jam ${minutes} menit` : `${hours} jam ${minutes} menit`
   })()
-  const lines = [
-    buildMenuText(menuOptions),
-    '',
-    '🎯 *SHORTCUT MENU*',
-    ...(ctx.isGroup
-      ? ['Shortcut: 1. .list  |  2. .ask  |  3. .user', 'Ketik angka hanya setelah menu grup dibuka.']
-      : ['Shortcut angka hanya aktif setelah menu dibuka di grup.']),
-  ]
   return {
-    text: lines.join('\n'),
-    cardCaption: `👋 Halo, ${mention}!\n📚 Daftar kategori dan command dikirim setelah kartu menu ini.`,
+    text: buildMenuText({ ...menuOptions, category }),
+    cardCaption: '',
     mentions: [String(ctx.adminJid)],
     mention,
     role,
     features,
     commands,
-    weather,
+    weather: null,
     clock,
     dateText,
     runtime,
@@ -188,6 +179,10 @@ export function setMenuChoices(ctx, choices) {
   }
 }
 
+export function clearMenuChoices(ctx) {
+  menuChoices.delete(`${ctx.jid}|${ctx.adminJid}`)
+}
+
 export function consumeMenuChoice(ctx, text) {
   const key = `${ctx.jid}|${ctx.adminJid}`
   const entry = menuChoices.get(key)
@@ -202,16 +197,10 @@ export function consumeMenuChoice(ctx, text) {
   return entry.choices[index - 1]
 }
 
-export async function sendPersonalMenu(ctx) {
-  const menu = await buildPersonalMenu(ctx)
-  const card = renderMenuCard(menu)
-  if (ctx.isGroup) setMenuChoices(ctx, ['.list', '.ask', '.user'])
-  await ctx.sock.sendMessage(ctx.jid, {
-    image: card,
-    mimetype: 'image/png',
-    caption: menu.cardCaption,
-    mentions: menu.mentions,
-  })
+export async function sendPersonalMenu(ctx, category = '') {
+  const menu = await buildPersonalMenu(ctx, category)
+  if (category) clearMenuChoices(ctx)
+  else if (ctx.isGroup) setMenuChoices(ctx, ['.list', '.ask', '.user'])
   await ctx.sock.sendMessage(ctx.jid, { text: menu.text, mentions: menu.mentions })
   return menu
 }

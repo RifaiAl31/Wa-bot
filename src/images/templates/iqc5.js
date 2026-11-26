@@ -42,7 +42,7 @@ async function renderTheme({ text = '' }, theme) {
   fillRoundRect(ctx, PAD, bubbleY, W - PAD * 2, bubbleH, 38, colors.bubble)
   ctx.fillStyle = colors.accent
   ctx.font = `700 25px ${FONT}`
-  ctx.fillText('× - vanXone </>', PAD + 34, bubbleY + 46)
+  ctx.fillText('LUX BOT • Dev By Rifai', PAD + 34, bubbleY + 46)
 
   ctx.fillStyle = colors.text
   ctx.font = `${fitted.size}px ${FONT}`

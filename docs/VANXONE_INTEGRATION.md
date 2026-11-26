@@ -1,7 +1,7 @@
 # Integrasi fitur vanXone v7 ke Wa-bot
 
 Sumber: `vanxone_v7.zip` (diekstrak ke direktori referensi terpisah; tidak dijalankan sebagai bot kedua).
-Atribusi kode/data: `× - vanXone </>`. Tidak ada credential, cookie, session, atau API key yang disalin.
+Atribusi sumber kode/data dipertahankan dalam dokumentasi ini; identitas yang ditampilkan kepada pengguna adalah **LUX BOT — Dev By Rifai**. Tidak ada credential, cookie, session, atau API key yang disalin.
 
 ## 1. Pemetaan sumber → tujuan
 
@@ -18,7 +18,7 @@ Atribusi kode/data: `× - vanXone </>`. Tidak ada credential, cookie, session, a
 | `plugins/maker/logo3d.js`, `logogold.js` | `src/features/maker/index.js` | Canvas 2D lokal, gradient 3D/emas, border dekoratif. |
 | `plugins/ai/ai-rewriter.js`, `chatgpt.js`, `deepseek.js`, `gemini.js`, `glm-ai.js`, `fixcode.js` | `src/features/ai/writing.js` | Pola prompt diadaptasi, eksekusi lewat `aiService.askWithPrompt` (kuota terpusat). |
 | `plugins/ai/aiedit.js`, `editimage*.js`, `aifilter.js`, `o-toanime.js`, `o-tocartoon.js`, `o-toghibli.js`, `o-sologo.js` | Belum diintegrasikan | Bergantung image-generation/editing API ber-key; bot menampilkan status belum tersedia dan tidak mengarang endpoint atau hasil gambar. |
-| `plugins/maker/iqc.js`, `plugins/image/iqc5.js` | `.iqc`, `.iqc5` via `src/images/templates/` | `.iqc` memakai Canvas lokal dengan baterai; `.iqc5` mengadaptasi Canvas lokal source dan mempertahankan atribusi `× - vanXone </>`. |
+| `plugins/maker/iqc.js`, `plugins/image/iqc5.js` | `.iqc`, `.iqc5` via `src/images/templates/` | `.iqc` memakai Canvas lokal dengan baterai; `.iqc5` memakai watermark identitas LUX BOT, sementara atribusi sumber tetap ada di dokumentasi ini. |
 | `plugins/image/iqc2.js` | `.iqc2` | Source memanggil API eksternal; adaptasi lokal memakai status bar/baterai, tanpa klaim identik pixel. |
 | `plugins/image/iqcmerah.js` | `.iqcmerah` | Source memakai Canvas dengan template lokal dan emoji-map eksternal; adaptasi mempertahankan variasi merah, memakai font emoji lokal, tanpa mengunduh template/emoji. |
 | `plugins/maker/iqcdark.js`, `lib/kernel/plugins/canvas/iqcpink.js`, `iqcpinkv2.js` | `.iqcdark`, `.iqcpink`, `.iqcpinkv2` | Renderer upstream bergantung API atau wrapper `adapter e9`; disediakan variasi palet lokal dari Canvas IQC5, bukan klaim replika pixel-perfect. |
@@ -51,7 +51,7 @@ Atribusi kode/data: `× - vanXone </>`. Tidak ada credential, cookie, session, a
 
 - `src/ai/service.js`: tambah `askWithPrompt`, memakai `checkLimits` + `recordUsage` yang sama dengan `/ask`.
 - `src/commands/router.js`: routing fitur dan `.doa`; tidak mengubah session WhatsApp.
-- `src/commands/registry.js`, `src/commands/menu.js`: daftar command role-aware; `.menu` mengirim kartu ringkasan Canvas lalu daftar perintah lengkap. Label “BUKA MENU” hanya petunjuk visual karena Baileys 6.7.24 tidak menyediakan tombol native yang dipakai bot ini; tiga shortcut angka tetap berfungsi.
+- `src/commands/registry.js`, `src/commands/menu.js`: registry metadata dan menu kategori bertingkat; `.menu` hanya menampilkan kategori, `.menu <kategori>` menampilkan command aktif. Shortcut grup `1/2/3` tetap berfungsi hanya dalam konteks menu utama.
 - `src/images/generator.js`: routing variasi IQC dan quote sosial; validasi input/media, render Canvas lokal, label simulasi, pembersihan file sementara.
 - `src/features/islam/index.js`: transliterasi ayat, pencarian doa sesuai source, validasi MP3 dan cache murottal dengan batas ukuran/TTL.
 - `src/features/sticker/service.js`: memberi tahu pengguna saat `.attp` hanya dapat membuat stiker statis karena FFmpeg tidak tersedia.
@@ -110,3 +110,107 @@ node src/index.js
 ```
 
 Bot kedua tidak dijalankan. Database `data/bot.db`, tabel lama, dan sesi WhatsApp tidak diubah/reset.
+
+## 10. Audit inventaris game VanXone
+
+Berikut handler permainan yang ditemukan di direktori game/fun/tebak yang diaudit. Status “tidak diintegrasikan” berarti source/data/dependency tidak disalin; banyak handler memerlukan engine/adaptor VanXone, data berlisensi tidak jelas, atau API eksternal. Nama command dan alias berasal dari metadata handler arsip, bukan tebakan dari nama file.
+
+### `plugins/game/`
+
+| Game | Command sumber | File sumber | Dependency penting | Status |
+|---|---|---|---|---|
+| Anagram | `anagram`, `acakkata` | `plugins/game/anagram.js` | `lib/fx`, `lib/db`, Map sesi | Tidak diintegrasikan |
+| Benar/Salah | `benaratausalah`, `bata`, `benarsalah`, `bors` | `plugins/game/bns.js` | Adapter e7, API SynoxCloud, Map sesi/skor | Tidak diintegrasikan |
+| Catur | `chess`, `catur` | `plugins/game/chess.js` | `lib/fa.gameHtml` | Tidak diintegrasikan |
+| Connect Four | `c4`, `connect4`, `sambung4` | `plugins/game/connect4.js` | `lib/gamesession` | Tidak diintegrasikan |
+| Dino | `dino`, `dinorun` | `plugins/game/dino.js` | `lib/fa.gameHtml` | Tidak diintegrasikan |
+| Dino Runner | `dino`, `dinogame`, `dinorunner` | `plugins/game/game-dino.js` | Adapter e2, HTML/JS | Tidak diintegrasikan |
+| Geometry Dash | `geometrydash`, `gdmini`, `gd`, `geometrygame` | `plugins/game/game-geometry.js` | Adapter e2, browser game | Tidak diintegrasikan |
+| Minesweeper | `minesweeper`, `sweeper`, `mine` | `plugins/game/game-minesweeper.js` | Adapter e2 | Tidak diintegrasikan |
+| Sambung kata | `sambungkata`, `skata` | `plugins/game/game-sambungkata.js` | Adapter e2, axios, cheerio, data kata remote | Tidak diintegrasikan |
+| Sonic | `sonic`, `speedy`, `speeddash` | `plugins/game/game-sonic.js` | Adapter e2, `crypto.randomUUID`, HTML game | Tidak diintegrasikan |
+| Block puzzle | `blockblast`, `blockgame`, `blockpuzzle`, `block` | `plugins/game/game-blockgame.js` | Adapter e2 | Tidak diintegrasikan |
+| Hint Cak Lontong | `calo` | `plugins/game/game-caklontong_hint.js` | Adapter e2, handler pendamping | Tidak diintegrasikan |
+| Tebak bendera | `tebakbendera`, `tbendera`, `whoflag`, `who` | `plugins/game/game-tebakbendera.js` | Adapter e2, axios, FlagCDN/Bochil JSON | Tidak diintegrasikan |
+| Tebak Hero ML | `tebakheroml`, `whohero` | `plugins/game/game-tebakheroml.js` | Adapter e2, axios, Deline API | Tidak diintegrasikan |
+| Tebak Jakarta | `tebakjkt`, `whojkt` | `plugins/game/game-tebakjkt.js` | Adapter e2, axios, JSON remote | Tidak diintegrasikan |
+| Tebak kata | `tebakkata`, `tk` | `plugins/game/game-tebakkata.js` | Adapter e2, axios, Siputzx API | Tidak diintegrasikan |
+| Tebak surah | `tebaksurah`, `whosurah` | `plugins/game/game-tebaksurah.js` | Adapter e2, axios, Al-Quran Cloud API | Tidak diintegrasikan |
+| Tebak warna | `tebakwarna`, `whowarna` | `plugins/game/game-tebakwarna.js` | Adapter e2, axios, JSON remote | Tidak diintegrasikan |
+| Teka-teki | `tekateki`, `whoteka` | `plugins/game/game-tekateki.js` | Adapter e2, axios, Bochil JSON | Tidak diintegrasikan |
+| Matematika | `math`, `matematika` | `plugins/game/math.js` | `lib/quizgame`, `quizdata`, `interactive`, `richgame`, `game` | Tidak diintegrasikan |
+| Mastermind | `mm`, `mastermind`, `tebakkode` | `plugins/game/mastermind.js` | `lib/gamesession` | Tidak diintegrasikan |
+| 2048 | `2048` | `plugins/game/g2048.js` | `lib/gamesession` | Tidak diintegrasikan |
+| Hangman | `hangman`, `hm`, `tebakkata` | `plugins/game/hangman.js` | `lib/game`, `interactive`, `richgame`, `hangman`, `utils` | Tidak diintegrasikan |
+| Minesweeper | `ms`, `minesweeper`, `ranjau` | `plugins/game/minesweeper.js` | `lib/gamesession` | Tidak diintegrasikan |
+| Snake | `snake`, `ular` | `plugins/game/snake.js` | `lib/gamesession` | Tidak diintegrasikan |
+| Tetris | `tetris`, `tetri` | `plugins/game/tetris.js` | `crypto.randomUUID`, `lib/fa.gameHtml` | Tidak diintegrasikan |
+| Tic-tac-toe | `tictactoe`, `ttt`, `tic` | `plugins/game/ttt.js` | `lib/fa.gameHtml` | Tidak diintegrasikan |
+| Teka-teki silang | `tts`, `teka`, `teki`, `silang` | `plugins/game/tts.js` | `lib/fa.gameHtml` | Tidak diintegrasikan |
+| Tebak-tebakan | `tebakan`, `tebaktebakan`, `riddle` | `plugins/game/tebakan.js` | `lib/game`, `interactive`, `richgame`, `utils` | Tidak diintegrasikan |
+| Tebak emoji | `tebakemoji`, `emojiquiz` | `plugins/game/tebakemoji.js` | `lib/game`, Map | Tidak diintegrasikan |
+| Tebak bola | `tebakbola`, `whobola` | `plugins/game/tebakbola.js` | Adapter e7, axios, Deline API | Tidak diintegrasikan |
+| Tebak Free Fire | `tebakff`, `whoff` | `plugins/game/tebakff.js` | Adapter e7, axios, Deline API | Tidak diintegrasikan |
+| Tebak kartun | `tebakkartun` | `plugins/game/tebakkartun.js` | Adapter e2, fetch helper, `${global.web}` API, sesi koneksi | Tidak diintegrasikan |
+| Tebak kabupaten | `kabupaten` | `plugins/game/kabupaten.js` | Adapter e2, fetch helper, `${global.web}` API, sesi koneksi | Tidak diintegrasikan |
+| Cerdas Cermat SD | `cc-sd` | `plugins/game/cc-sd.js` | Adapter e2, fetch helper, `${global.web}` API, sesi koneksi | Tidak diintegrasikan |
+| Tebak istilah Geometry Dash | `tebakgd`, `tgd`, `gdquiz`, `guessgd` | `plugins/game/tebakgd.js` | Adapter e1, JSON, `gameData`, database/level/context helpers | Tidak diintegrasikan |
+| Tebak pikiran | `tebakpikiran`, `mindread`, `tebakin`, `tbpikiran` | `plugins/game/tebakpikiran.js` | Adapter e1, undici, endpoint AI, Map | Tidak diintegrasikan |
+
+### `lib/kernel/plugins/game/`
+
+| Game | Command sumber | File sumber | Dependency penting | Status |
+|---|---|---|---|---|
+| Adu otak | `adu`, `aduotak`, `kuisduel` | `lib/kernel/plugins/game/adu.js` | Engine, config, data `adu.json`/`quiz.json`, room/index Maps | Tidak diintegrasikan |
+| Akinator | `akinator` | `lib/kernel/plugins/game/akinator.js` | `runAkinator` engine | Tidak diintegrasikan |
+| Asah otak | `asahotak` | `lib/kernel/plugins/game/asahotak.js` | `runGame` engine | Tidak diintegrasikan |
+| Bomb | `bomb` | `lib/kernel/plugins/game/bomb.js` | `runBomb` engine | Tidak diintegrasikan |
+| Cak Lontong | `caklontong` | `lib/kernel/plugins/game/caklontong.js` | `runGame` engine | Tidak diintegrasikan |
+| Dadu | `dadu` | `lib/kernel/plugins/game/dadu.js` | `runDadu` engine | Tidak diintegrasikan |
+| Family 100 | `family100` | `lib/kernel/plugins/game/family100.js` | `runFamily100` engine | Tidak diintegrasikan |
+| Hangman | `hangman` | `lib/kernel/plugins/game/hangman.js` | `runHangman` engine | Tidak diintegrasikan |
+| Susun kata | `kataacak` | `lib/kernel/plugins/game/kataacak.js` | `runGame` engine | Tidak diintegrasikan |
+| Minesweeper | `minesweeper` | `lib/kernel/plugins/game/minesweeper.js` | `runMinesweeper` engine | Tidak diintegrasikan |
+| Quiz | `quiz`, `kuis`, `qa`, `jawabquiz`, `jwbquiz` | `lib/kernel/plugins/game/quiz.js` | `data/quiz.json`, `lib/engine/plugins.js`, `features.js`, Map per chat | Didesain ulang; command aktif `.quiz`/`.qa` |
+| Sambung kata | `sambungkata` | `lib/kernel/plugins/game/sambungkata.js` | `runSambungKata` engine | Tidak diintegrasikan |
+| Siapakah aku | `siapakahaku` | `lib/kernel/plugins/game/siapakahaku.js` | `runGame` engine | Tidak diintegrasikan |
+| Suit PvP | `suitpvp` | `lib/kernel/plugins/game/suitpvp.js` | `runSuitPvp` engine | Tidak diintegrasikan |
+| Susun kata | `susunkata` | `lib/kernel/plugins/game/susunkata.js` | `runGame` engine | Tidak diintegrasikan |
+| Teka-teki | `tekateki` | `lib/kernel/plugins/game/tekateki.js` | `runGame` engine | Tidak diintegrasikan |
+| Tic-tac-toe | `tictactoe` | `lib/kernel/plugins/game/tictactoe.js` | `runTicTacToe` engine | Tidak diintegrasikan |
+| Suit vs bot | `suitbot` | `lib/kernel/plugins/game/suitbot.js` | `rpgCmd` engine | Tidak diintegrasikan |
+| Jawab / hint / nyerah | `jawab`, `hint`, `nyerah` | `jawab.js`, `hint.js`, `nyerah.js` | `runGameAnswer`, `runGameHint`, `runGameGiveUp`; jawab juga passive hook | Bukan game tersendiri; dukungan game |
+
+### `plugins/fun/` dan `lib/kernel/plugins/fun/`
+
+| Game | Command sumber | File sumber | Dependency penting | Status |
+|---|---|---|---|---|
+| Trivia | `trivia`, `jawabtrivia` | `plugins/fun/trivia.js` | Adapter e5, session Map | Tidak diintegrasikan |
+| Higher/lower | `guesshilo`, `hilo`, `tebakhilo` | `plugins/fun/guesshilo.js` | Adapter e5, session Map | Tidak diintegrasikan |
+| Susun kata | `wordscramble`, `scramble`, `tebakkata`, `jawabscramble` | `plugins/fun/wordscramble.js` | Adapter e5, session Map | Tidak diintegrasikan |
+| This-or-that | `thisorthat`, `pilihmana` | `plugins/fun/thisorthat.js` | Adapter e5 | Tidak diintegrasikan |
+| Connect Four | `c4`, `connect4`, `connectfour`, `empatsejajar` | `lib/kernel/plugins/fun/c4.js` | Engine, Map + TTL | Tidak diintegrasikan |
+| Battleship | `kapal`, `battleship`, `kapalperang` | `lib/kernel/plugins/fun/kapal.js` | Engine, Map + TTL | Tidak diintegrasikan |
+| Mastermind | `mastermind`, `bullcow`, `tebakangka4` | `lib/kernel/plugins/fun/mastermind.js` | Engine, RPG/style helpers, Map/timer | Tidak diintegrasikan |
+| Nim | `nim`, `ambilbatu`, `gamenim` | `lib/kernel/plugins/fun/nim.js` | Engine/style, Map + TTL | Tidak diintegrasikan |
+| Sudoku | `sudoku`, `sdk` | `lib/kernel/plugins/fun/sudoku.js` | Engine/style, Map + TTL | Tidak diintegrasikan |
+| Werewolf | `werewolf`, `ww`, `wwcreate`, `wwjoin`, `wwstart`, `wwvote`, dan kontrol `ww*` | `lib/kernel/plugins/fun/werewolf.js` | Engine/RPG, game/player Maps | Tidak diintegrasikan |
+| Adu mengetik | `cepatketik`, `adumengetik`, `ketikcepat`, `typerace` | `lib/kernel/plugins/fun/cepatketik.js` | Engine, RPG/style/ekstra, Map | Tidak diintegrasikan |
+| Hitung benda | `hitungbenda`, `berapabenda`, `countgame`, `hitunggambar` | `lib/kernel/plugins/fun/hitungbenda.js` | Engine, sharp/crypto, RPG/style, Map | Tidak diintegrasikan |
+| Icebreaker | `icebreaker`, `teka`, `tekamenyerah`, `topik` | `lib/kernel/plugins/fun/icebreaker.js` | Engine/style, live-session Map | Tidak diintegrasikan |
+| Tebak | `tebak`, `petunjuk`, `skortebak`, `tebakhitung`, `tebakibukota`, `tebaknyerah`, `tebakperibahasa` | `lib/kernel/plugins/fun/tebak.js` | Engine, filesystem, RPG/style, Map | Tidak diintegrasikan |
+| Tebak angka / pilihan | `angka`, `pilihan`, `tebakangka`, `wyr` | `lib/kernel/plugins/fun/roast.js` | Engine/group/style, Map angka | Tidak diintegrasikan |
+| Suit | `suit` | `lib/kernel/plugins/fun/suit.js` | `rbRun`, `rbRegister` | Tidak diintegrasikan |
+
+### `lib/kernel/plugins/tebak/`
+
+Semua file di bawah menggunakan `runGame` dari `lib/engine/plugins.js`; command metadata adalah satu nama yang sama dengan basename, tanpa alias tambahan. Semuanya belum diintegrasikan:
+
+`tebakanime`, `tebakanml`, `tebakbenda`, `tebakbendera`, `tebakbuah`, `tebakepep`, `tebakfilm`, `tebakgambar`, `tebakgame`, `tebakheroml`, `tebakhewan`, `tebakjkt`, `tebakkalimat`, `tebakkata`, `tebakkimia`, `tebakkota`, `tebaklagu`, `tebaklirik`, `tebaklogo`, `tebakmakanan`, `tebaknegara`, `tebakprofesi`, `tebaksurah`, `tebaktebakan`, `tebakwarna`.
+
+### Dependency, lisensi, dan batas integrasi
+
+- Source quiz yang ditelusuri mengimpor engine VanXone dan membaca `lib/kernel/plugins/game/data/quiz.json`. Pertanyaan/data itu tidak disalin; pertanyaan Wa-bot ditulis baru.
+- Tidak ditemukan `LICENSE*`, `COPYING*`, atau `UNLICENSE*` yang secara jelas mencakup source game tersebut. File license Apache di area lain arsip tidak dianggap otomatis mencakup plugin game.
+- Tidak ada dependency npm baru. Implementasi quiz Wa-bot hanya memakai runtime Node dan registry/router yang sudah ada; sesi berada di memori, terisolasi per chat dan pemain, satu jawaban, timeout tiga menit, tanpa reward atau taruhan.
+- Handler yang terkait kasino/taruhan/uang (misalnya slot, roulette, poker, judi bola, lotre, bonanza, taruhan dadu, crash dan fitur saldo/deposit/withdraw) sengaja tidak diintegrasikan. Leaderboard, lookup, dan handler pendukung juga bukan game mandiri.

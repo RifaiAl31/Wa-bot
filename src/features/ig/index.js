@@ -504,7 +504,7 @@ async function renderIgNote(ctx, arg) {
   const note = clean(rawNote || 'Aku ingin keduanya', 140)
   const time = clean(rawTime || '3m', 12)
   const words = note.split(/\s+/).filter(Boolean)
-  if (words.length > 7) return reply(ctx, 'Catatan maksimal 7 kata, sesuai source noteig vanXone.')
+  if (words.length > 7) return reply(ctx, 'Catatan maksimal 7 kata.\nLUX BOT — Dev By Rifai')
   const W = 720; const H = 1280
   const { canvas, ctx: g } = page(W, H)
   const bg = g.createLinearGradient(0, 0, W, H)

@@ -137,6 +137,8 @@ test('.surah daftar menampilkan 114 surah tanpa network', async () => {
   assert.match(text, /DAFTAR SURAH/)
   assert.match(text, /1\. Al-Fatihah \(7\)/)
   assert.match(text, /114\. An-Nas \(6\)/)
+  assert.match(text, /LUX BOT — Dev By Rifai/)
+  assert.doesNotMatch(text, /vanXone|Vox/i)
   assert.equal(fetchFn.calls.length, 0)
 })
 

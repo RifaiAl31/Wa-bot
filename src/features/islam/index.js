@@ -11,7 +11,7 @@ import { reply } from '../../commands/context.js'
 import { roleOf } from '../../services/roleService.js'
 import { featureService } from '../../services/featureService.js'
 
-const CREDIT = 'Diadaptasi dari vanXone v7 — × - vanXone </>'
+const CREDIT = 'LUX BOT — Dev By Rifai'
 const API_BASE = 'https://api.alquran.cloud/v1'
 const QURAN_JSON_URL = 'https://raw.githubusercontent.com/penggguna/QuranJSON/master/quran.json'
 const DOA_URL = 'https://doa-doa-api-ahmadramadhan.fly.dev/api'

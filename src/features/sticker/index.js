@@ -9,7 +9,7 @@ export {
   createExif, addExifToWebp, readExifFromWebp, assertWebp,
   imageToWebp, imageToSticker, getStickerMetadata, setStickerMetadata,
   parseStickerArg, extractStickerTarget, validateStickerTarget,
-  hasFFmpeg, ffmpegBin, explainFfmpeg, makeWorkDir,
+  hasFFmpeg, ffmpegBin, explainFfmpeg, runFfmpeg, makeWorkDir,
 } from './service.js'
 
 const COMMANDS = {

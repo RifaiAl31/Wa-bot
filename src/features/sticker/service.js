@@ -20,9 +20,9 @@ const EMOJI_RE = /\p{Extended_Pictographic}/gu
 // Pack metadata (the .pack command can override it at runtime)
 // ---------------------------------------------------------------------------
 const defaults = () => ({
-  packname: process.env.STICKER_PACK || 'Bot',
-  author: process.env.STICKER_AUTHOR || 'Bot',
-  packId: process.env.STICKER_PACK_ID || 'com.bot.sticker',
+  packname: 'LUX BOT',
+  author: 'Dev By Rifai',
+  packId: 'com.luxbot.sticker',
   emojis: ['🤖'],
 })
 let metadataOverride = null
@@ -153,7 +153,7 @@ export function ffmpegBin() {
 
 export function explainFfmpeg(error) {
   const detail = String(error?.stderr || error?.message || error || '').trim().split('\n').slice(-2).join(' ').slice(0, 300)
-  return `ffmpeg tidak tersedia atau gagal (${ffmpegBin()}). ${detail || 'Pasang ffmpeg / set FFMPEG=/path/to/ffmpeg.'}`
+  return `ffmpeg tidak tersedia atau gagal (${ffmpegBin()}). ${detail || 'Pasang FFmpeg untuk platform ini atau set FFMPEG=/path/to/ffmpeg.'}`
 }
 
 let ffmpegCache = null
@@ -486,7 +486,7 @@ export async function cmdAttp(ctx, arg) {
     if (!await hasFFmpeg()) {
       const sticker = await sendSticker(ctx, await imageToSticker(first, parseStickerArg('')))
       await ctx.sock.sendMessage(ctx.jid, {
-        text: 'FFmpeg tidak tersedia; .attp dikirim sebagai stiker statis.',
+        text: 'FFmpeg tidak tersedia; .attp dikirim sebagai stiker statis.\nLUX BOT — Dev By Rifai',
       })
       return sticker
     }
@@ -585,6 +585,8 @@ export async function cmdPack(ctx, arg) {
         `Emoji: ${m.emojis.join(' ')}`,
         '',
         `Ubah: \`.pack nama|author\``,
+        '',
+        'LUX BOT — Dev By Rifai',
       ].join('\n'),
     })
     return getStickerMetadata()
@@ -594,6 +596,6 @@ export async function cmdPack(ctx, arg) {
   if (pack.trim()) patch.packname = pack.trim()
   if (rest.join('|').trim()) patch.author = rest.join('|').trim()
   const next = setStickerMetadata(patch)
-  await ctx.sock.sendMessage(ctx.jid, { text: `✅ Pack disimpan: ${next.packname} | ${next.author}` })
+  await ctx.sock.sendMessage(ctx.jid, { text: `✅ Pack disimpan: ${next.packname} | ${next.author}\nLUX BOT — Dev By Rifai` })
   return next
 }

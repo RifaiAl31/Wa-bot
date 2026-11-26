@@ -7,7 +7,7 @@ import {
 } from '../services/announcements.js'
 import { deliverAnnouncement } from '../services/delivery.js'
 import { withReaction } from './reactions.js'
-import { buildMenuText, normalizeCommand, RESTRICTED_COMMANDS } from './registry.js'
+import { COMMAND_GROUPS, normalizeCommand, RESTRICTED_COMMANDS } from './registry.js'
 import { aiService } from '../ai/service.js'
 import { handleQuoteCommand } from '../images/generator.js'
 import * as imageEngine from '../images/engine.js'
@@ -37,12 +37,20 @@ import { handleIslamCommand } from '../features/islam/index.js'
 import { handleWritingCommand } from '../features/ai/writing.js'
 import { handleStickerCommand } from '../features/sticker/index.js'
 import { handleIgCommand } from '../features/ig/index.js'
+import { handleGameCommand } from '../features/games/index.js'
 import {
   dayName, weekName, timeName, groupLabel, shortJid, normalizeId,
   formatAnnouncementDetail, DAY_CHOICES,
 } from '../utils/format.js'
 
 export const FLOW_COMMANDS = new Set(['.batal', '.ya', '.iya', '.y', '.tidak', '.t', '.selesai', '.update'])
+const PRIVATE_ALLOWED = new Set([
+  '.cancel',
+  ...COMMAND_GROUPS.flatMap((group) =>
+    group.commands.filter((item) => item.scope === 'all').map((item) => item.cmd),
+  ),
+  ...config.privateDotCommands.map(normalizeCommand).filter(Boolean),
+])
 
 const LEGACY_HANDLER_COMMANDS = new Set([
   '.no', '.cancel', '.id', '.set', '.list', '.detail', '.preview', '.edit',
@@ -158,13 +166,9 @@ export async function handleMessage(ctx) {
   const registeredAdmin = ctx.isRegisteredAdmin !== undefined ? Boolean(ctx.isRegisteredAdmin) : isRegisteredAdmin(ctx.adminJid)
 
   // Private chat accepts only explicit dot commands, plus a contextual VIP password.
-  const PRIVATE_ALLOWED = [
-    '.vip', '.cancel', '.menu', '.help', '.user', '.ping', '.status', '.info',
-  ]
   if (!isGroup) {
     if (isCmd && first.startsWith('/')) return
-    const privateCommands = config.privateDotCommands.map(normalizeCommand)
-    if (isCmd && !PRIVATE_ALLOWED.includes(cmd) && !privateCommands.includes(cmd)) return
+    if (isCmd && !PRIVATE_ALLOWED.has(cmd)) return
     if (!isCmd) {
       if (!text) return
       if (vipSession.getSession(ctx.adminJid)) {
@@ -370,15 +374,10 @@ export async function routeCommand(ctx, cmd, arg) {
       return handleQuoteCommand({ ...ctx, cmd, arg })
 
     case '/menu':
-    case '.menu': return sendPersonalMenu(ctx)
+    case '.menu': return sendPersonalMenu(ctx, arg)
 
     case '/help':
-    case '.help': return reply(ctx, buildMenuText({
-      admin: registeredAdmin,
-      vip: isVip(ctx.adminJid),
-      privateChat: ctx.isGroup === false,
-      privateCommands: config.privateDotCommands.map(normalizeCommand).filter(Boolean),
-    }))
+    case '.help': return sendPersonalMenu(ctx, arg)
 
     case '.user': {
       const role = roleOf(ctx.adminJid)
@@ -456,6 +455,9 @@ export async function routeCommand(ctx, cmd, arg) {
     case '.igdm':
     case '.ignote': return handleIgCommand(ctx, cmd, arg)
 
+    case '.quiz':
+    case '.qa': return handleGameCommand(ctx, cmd, arg)
+
     case '.sticker':
     case '.s':
     case '.stiker':
@@ -463,6 +465,11 @@ export async function routeCommand(ctx, cmd, arg) {
     case '.attp':
     case '.qc':
     case '.brat':
+    case '.bratblack':
+    case '.bratgreen':
+    case '.brat2':
+    case '.bratimg':
+    case '.brattext':
     case '.bratblack':
     case '.bratgreen':
     case '.emojimix':

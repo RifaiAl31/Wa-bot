@@ -4,16 +4,24 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import sharp from 'sharp'
+import { testEnv, ADMIN, GROUP } from './helpers.js'
 
+testEnv('sticker')
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sticker-test-'))
 const tempDir = path.join(root, 'temp')
 process.env.IMAGE_TEMP_DIR = tempDir
 process.env.FFMPEG = process.env.FFMPEG || 'ffmpeg'
 
 const { setWaDownloader } = await import('../src/services/waMedia.js')
-const { handleStickerCommand, readExifFromWebp, imageToSticker, hasFFmpeg, runFfmpeg } = await import('../src/features/sticker/index.js')
+const { handleStickerCommand, readExifFromWebp, imageToSticker, getStickerMetadata, hasFFmpeg, runFfmpeg } = await import('../src/features/sticker/index.js')
+const { initDb } = await import('../src/db/index.js')
+const { groupService } = await import('../src/services/groups.js')
+const { handleMessage } = await import('../src/commands/router.js')
+initDb({ force: true })
+groupService.upsert(GROUP, 'Sticker Test', 2)
 
-const JID = '1203630@g.us'
+const JID = GROUP
+const PRIVATE = '628123456789@s.whatsapp.net'
 const png = await sharp({ create: { width: 96, height: 64, channels: 4, background: { r: 220, g: 40, b: 40, alpha: 1 } } }).png().toBuffer()
 const stickerWebp = await imageToSticker(png, { packname: 'Uji', author: 'Tester' })
 
@@ -53,6 +61,12 @@ function makeCtx(sock, cmd, arg = '', options = {}) {
 const stickers = (s) => s.sent.filter((x) => Buffer.isBuffer(x.content.sticker)).map((x) => x.content.sticker)
 const textReplies = (s) => s.sent.filter((x) => typeof x.content.text === 'string').map((x) => x.content.text)
 const isWebp = (b) => Buffer.isBuffer(b) && b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP'
+
+test('identitas default sticker memakai LUX BOT dan Dev By Rifai', () => {
+  const metadata = getStickerMetadata()
+  assert.equal(metadata.packname, 'LUX BOT')
+  assert.equal(metadata.author, 'Dev By Rifai')
+})
 
 test('.sticker dari gambar menghasilkan WEBP dengan EXIF pack/author', async () => {
   mediaBuffer = png
@@ -207,6 +221,32 @@ test('.pack menampilkan dan menyimpan metadata', async () => {
   const sock3 = makeSock()
   await handleStickerCommand(makeCtx(sock3, '.s', ''), '.s', '')
   assert.equal(readExifFromWebp(stickers(sock3)[0])['sticker-pack-name'], 'PaketBaru')
+})
+
+test('router memproses .sticker pada caption gambar dan alias .s pada reply', async () => {
+  mediaBuffer = png
+  mediaMime = 'image/png'
+  for (const [command, options] of [['.sticker', {}], ['.s', { quoted: true }]]) {
+    const sock = makeSock()
+    await handleMessage(makeCtx(sock, command, '', options))
+    assert.ok(isWebp(stickers(sock)[0]), command)
+  }
+})
+
+test('router memproses alias sticker yang memiliki variasi tema', async () => {
+  const sock = makeSock()
+  await handleMessage(makeCtx(sock, '.bratblack', 'teks uji'))
+  assert.ok(isWebp(stickers(sock)[0]))
+})
+
+test('private chat menjalankan command sticker eksplisit dan mengabaikan teks biasa', async () => {
+  const sock = makeSock()
+  await handleMessage({ ...makeCtx(sock, '.ttp', 'halo pribadi'), jid: PRIVATE, isGroup: false })
+  assert.ok(isWebp(stickers(sock)[0]))
+
+  const plainSock = makeSock()
+  await handleMessage({ ...makeCtx(plainSock, 'pesan biasa'), jid: PRIVATE, isGroup: false })
+  assert.equal(plainSock.sent.length, 0)
 })
 
 test('tidak ada file sementara yang tertinggal', async () => {
