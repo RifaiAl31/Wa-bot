@@ -65,30 +65,63 @@ test('chat pribadi: "Apa kabar?" diabaikan tanpa balasan', async () => {
   assert.equal(texts(sock).length, 0)
 })
 
-test('chat pribadi: /ask diabaikan tanpa memanggil AI', async () => {
+test('chat pribadi: shortcut angka tanpa menu tidak diproses', async () => {
   const sock = makeSock()
+  await handleMessage(privateCtx(sock, '1'))
+  assert.equal(texts(sock).length, 0)
+})
+
+test('chat pribadi: command AI tidak diizinkan tanpa private allowlist', async () => {
+  const sock = makeSock()
+  await handleMessage(privateCtx(sock, '.ask hi'))
   await handleMessage(privateCtx(sock, '/ask hi'))
   assert.equal(texts(sock).length, 0)
 })
 
-test('chat pribadi: /vip tetap diproses sesuai alur VIP', async () => {
+test('chat pribadi: prefix lama tidak diproses', async () => {
   const sock = makeSock()
   await handleMessage(privateCtx(sock, '/vip'))
+  assert.equal(texts(sock).length, 0)
+})
+
+test('menu private hanya menampilkan command yang diizinkan di private chat', async () => {
+  const sock = makeSock()
+  await handleMessage(privateCtx(sock, '.menu'))
+  const out = texts(sock).join('\n')
+  assert.match(out, /◈ `\.vip`/)
+  assert.match(out, /◈ `\.user`/)
+  assert.doesNotMatch(out, /◈ `\.set`|◈ `\.ask/)
+  const sentAfterMenu = sock.sent.length
+  await handleMessage(privateCtx(sock, '1'))
+  assert.equal(sock.sent.length, sentAfterMenu)
+})
+
+test('chat pribadi: .vip tetap diproses sesuai alur VIP', async () => {
+  const sock = makeSock()
+  await handleMessage(privateCtx(sock, '.vip'))
   assert.match(texts(sock)[0], /VIP ACTIVATION/)
   assert.match(texts(sock)[0], /password VIP/i)
 })
 
-test('grup: /ask hi tetap merespons dengan AI', async () => {
+test('grup: .ask hi tetap merespons dengan AI', async () => {
   const sock = makeSock()
-  await handleMessage(groupCtx(sock, '/ask hi'))
+  await handleMessage(groupCtx(sock, '.ask hi'))
   assert.ok(texts(sock).some((t) => /JAWABAN AI/.test(t)))
   assert.ok(texts(sock).some((t) => /Jawaban AI untuk hi/.test(t)))
 })
 
-test('grup: /menu tetap tampil', async () => {
+test('grup: .models dan alias .free menampilkan daftar model', async () => {
+  for (const command of ['.models', '.free']) {
+    const sock = makeSock()
+    await handleMessage(groupCtx(sock, command))
+    assert.ok(texts(sock).some((text) => /DAFTAR MODEL AI GRATIS/.test(text)), command)
+  }
+})
+
+test('grup: .menu tetap tampil', async () => {
   const sock = makeSock()
-  await handleMessage(groupCtx(sock, '/menu'))
-  assert.ok(texts(sock).some((t) => /KAYY ASSISTANT/.test(t)))
+  await handleMessage(groupCtx(sock, '.menu'))
+  assert.ok(texts(sock).some((t) => /LUX BOT/.test(t)))
 })
 
 test('grup: pesan biasa tanpa prefix diabaikan', async () => {

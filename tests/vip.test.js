@@ -44,9 +44,9 @@ const texts = (s) => s.sent.filter(x => x.content.text).map(x => x.content.text)
 const deletes = (s) => s.sent.filter(x => x.content.delete)
 const userJid = (n) => `${n}@s.whatsapp.net`
 
-test('/vip di grup hanya mengarahkan ke chat pribadi, password tidak diminta', async () => {
+test('.vip di grup hanya mengarahkan ke chat pribadi, password tidak diminta', async () => {
   const sock = makeSock()
-  await handleMessage(ctx(sock, `/vip ${PASSWORD}`))
+  await handleMessage(ctx(sock, `.vip ${PASSWORD}`))
   assert.equal(texts(sock).length, 1)
   assert.match(texts(sock)[0], /VIP ACTIVATION/)
   assert.match(texts(sock)[0], /private chat bot/i)
@@ -54,9 +54,9 @@ test('/vip di grup hanya mengarahkan ke chat pribadi, password tidak diminta', a
   assert.equal(listVips().length, 0)
 })
 
-test('/vip di chat pribadi memulai sesi tanpa meminta password di grup', async () => {
+test('.vip di chat pribadi memulai sesi tanpa meminta password di grup', async () => {
   const sock = makeSock()
-  await handleMessage(ctx(sock, '/vip', { isGroup: false, user: userJid('628111000001') }))
+  await handleMessage(ctx(sock, '.vip', { isGroup: false, user: userJid('628111000001') }))
   assert.match(texts(sock)[0], /Silakan masukkan password VIP Anda/)
   assert.match(texts(sock)[0], /2 menit/)
   assert.doesNotMatch(texts(sock)[0], new RegExp(PASSWORD))
@@ -66,7 +66,7 @@ test('/vip di chat pribadi memulai sesi tanpa meminta password di grup', async (
 test('password salah maksimal 3 kali lalu sesi dikunci', async () => {
   const sock = makeSock()
   const user = userJid('628111000002')
-  await handleMessage(ctx(sock, '/vip', { isGroup: false, user }))
+  await handleMessage(ctx(sock, '.vip', { isGroup: false, user }))
   for (let i = 0; i < 3; i += 1) {
     await handleMessage(ctx(sock, 'salah-saja', { isGroup: false, user }))
   }
@@ -83,7 +83,7 @@ test('password salah maksimal 3 kali lalu sesi dikunci', async () => {
 test('password benar di chat pribadi mengaktifkan VIP dan pesan dihapus bila memungkinkan', async () => {
   const user = userJid('628111000003')
   const start = makeSock()
-  await handleMessage(ctx(start, '/vip', { isGroup: false, user }))
+  await handleMessage(ctx(start, '.vip', { isGroup: false, user }))
   const sock = makeSock()
   await handleMessage(ctx(sock, PASSWORD, { isGroup: false, user }))
   assert.match(texts(sock)[0], /VIP ACTIVATED SUCCESSFULLY/)
@@ -96,14 +96,14 @@ test('password benar di chat pribadi mengaktifkan VIP dan pesan dihapus bila mem
 test('user yang sudah VIP tidak didaftarkan ulang', async () => {
   const user = userJid('628111000003')
   const sock = makeSock()
-  await handleMessage(ctx(sock, '/vip', { isGroup: false, user }))
+  await handleMessage(ctx(sock, '.vip', { isGroup: false, user }))
   assert.match(texts(sock)[0], /sudah terdaftar sebagai VIP/)
   assert.equal(listVips().filter(v => v.number === '628111000003').length, 1)
 })
 
 test('sesi kedaluwarsa setelah batas waktu', async () => {
   const user = userJid('628111000004')
-  await handleMessage(ctx(makeSock(), '/vip', { isGroup: false, user }))
+  await handleMessage(ctx(makeSock(), '.vip', { isGroup: false, user }))
   vipSession.expireSession(user)
   const sock = makeSock()
   await handleMessage(ctx(sock, PASSWORD, { isGroup: false, user }))
@@ -115,12 +115,12 @@ test('sesi dibuat di grup bisa dilanjutkan di private chat dengan JID berbeda (L
   const lid = '111999888@lid'
   const phone = '628777000111@s.whatsapp.net'
   const groupSock = makeSock({ contact: { jid: phone, lid } })
-  await handleMessage(ctx(groupSock, '/vip', { user: lid, isGroup: true, id: 'GL1' }))
+  await handleMessage(ctx(groupSock, '.vip', { user: lid, isGroup: true, id: 'GL1' }))
   assert.match(texts(groupSock)[0], /private chat bot/i)
   assert.ok(vipSession.getSession(phone))
 
   const privateSock = makeSock()
-  await handleMessage(ctx(privateSock, '/vip', { user: phone, isGroup: false, id: 'PV1' }))
+  await handleMessage(ctx(privateSock, '.vip', { user: phone, isGroup: false, id: 'PV1' }))
   assert.match(texts(privateSock)[0], /Sesi aktivasi masih aktif|Silakan masukkan password VIP Anda/)
   const done = makeSock()
   await handleMessage(ctx(done, PASSWORD, { user: phone, isGroup: false, id: 'PV2' }))
@@ -129,11 +129,11 @@ test('sesi dibuat di grup bisa dilanjutkan di private chat dengan JID berbeda (L
   assert.equal(isVip(lid), false)
 })
 
-test('/cancel membatalkan sesi', async () => {
+test('.cancel membatalkan sesi', async () => {
   const user = userJid('628111000005')
-  await handleMessage(ctx(makeSock(), '/vip', { isGroup: false, user }))
+  await handleMessage(ctx(makeSock(), '.vip', { isGroup: false, user }))
   const sock = makeSock()
-  await handleMessage(ctx(sock, '/cancel', { isGroup: false, user }))
+  await handleMessage(ctx(sock, '.cancel', { isGroup: false, user }))
   assert.match(texts(sock)[0], /dibatalkan/)
   assert.equal(vipSession.getSession(user), null)
 })
@@ -142,8 +142,8 @@ test('dua pengguna bersamaan tidak tertukar', async () => {
   const a = userJid('628111000006')
   const b = userJid('628111000007')
   await Promise.all([
-    handleMessage(ctx(makeSock(), '/vip', { isGroup: false, user: a, id: 'A' })),
-    handleMessage(ctx(makeSock(), '/vip', { isGroup: false, user: b, id: 'B' })),
+    handleMessage(ctx(makeSock(), '.vip', { isGroup: false, user: a, id: 'A' })),
+    handleMessage(ctx(makeSock(), '.vip', { isGroup: false, user: b, id: 'B' })),
   ])
   const sockA = makeSock(); const sockB = makeSock()
   await Promise.all([

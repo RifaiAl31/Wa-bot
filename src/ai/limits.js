@@ -32,7 +32,7 @@ export function checkLimits(userJid, groupJid) {
 export function recordUsage({ userJid, groupJid, command, modelId, status, reason, promptChars = 0, responseChars = 0, windowStart }) {
   run(`INSERT INTO ai_usage_logs(user_jid, group_jid, command, model_id, status, reason, prompt_chars, response_chars, created_at)
        VALUES (?,?,?,?,?,?,?,?,?)`,
-    userJid || null, groupJid || null, command || '/ask', modelId || null, status,
+    userJid || null, groupJid || null, command || '.ask', modelId || null, status,
     reason || null, promptChars, responseChars, new Date().toISOString())
   if (status === 'success' || status === 'failed') {
     run(`INSERT INTO ai_user_limits(user_jid, group_jid, window_start_ms, count, last_request_ms)

@@ -32,7 +32,7 @@ function successText(platform, filename) {
     '│',
     '╰━━━━━━━━━━━━━━━━━━━━━━╯',
     'Atribusi/watermark asli tetap dipertahankan.',
-    'KAYY ASSISTANT — Powered by Dev RifaiAl',
+    'LUX BOT — Dev By Rifai',
   ].join('\n')
 }
 
@@ -58,7 +58,7 @@ export async function downloaderCommand(ctx, cmd, arg = '') {
     downloaded = await extractor.download(url.href, { platform: platform.toLowerCase(), tempDir })
     const buffer = await fs.readFile(downloaded.file)
     const ext = downloaded.ext || path.extname(downloaded.file)
-    const caption = `${platform} — KAYY ASSISTANT — By Dev RifaiAl`
+    const caption = `${platform} — LUX BOT — Dev By Rifai`
     if (['.mp4', '.webm', '.mov'].includes(ext)) {
       await ctx.sock.sendMessage(ctx.jid, { video: buffer, mimetype: ext === '.webm' ? 'video/webm' : 'video/mp4', caption })
     } else {

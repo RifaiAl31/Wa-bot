@@ -9,7 +9,7 @@ import { withReaction } from './reactions.js'
 import {
   createContext, buildChoices, getActiveContext, clearContext,
 } from './quickReplies.js'
-import { COMMAND_GROUPS } from './registry.js'
+import { COMMAND_GROUPS, commandIsVisible } from './registry.js'
 import { shouldNotifyCooldown } from './cooldownNotice.js'
 
 const IMG_ACTIONS = ['🔍 Analisis Lebih Detail', '📝 Ambil Semua Teks (OCR)', '💡 Jelaskan Isi Gambar']
@@ -28,7 +28,7 @@ function guard(ctx, feature) {
 
 function usage(ctx, limit, status, reason = '', promptChars = 0, responseChars = 0) {
   recordUsage({
-    userJid: ctx.adminJid, groupJid: ctx.jid, command: ctx.cmd || '/ask',
+    userJid: ctx.adminJid, groupJid: ctx.jid, command: ctx.cmd || '.ask',
     modelId: ctx.modelId || null, status, reason, promptChars, responseChars,
     windowStart: limit?.windowStart,
   })
@@ -117,7 +117,7 @@ function menuCategoryText(admin, index) {
   const group = COMMAND_GROUPS.find((g) => g.title.includes(keys[index]))
   if (!group) return 'Kategori tidak tersedia.'
   const lines = ['🤖 *MENU BOT WHATSAPP*', '', group.title]
-  for (const item of group.commands.filter((x) => admin || !x.admin)) {
+  for (const item of group.commands.filter((x) => commandIsVisible(x, { admin }))) {
     lines.push(`- \`${item.usage}\` — ${item.desc}${item.admin ? ' (Admin)' : ''}`)
   }
   return lines.join('\n')

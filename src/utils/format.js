@@ -87,10 +87,10 @@ export const WEEK_CHOICES = WEEK_LABELS.map((l, i) => `${i}. ${l}`).join('\n')
 
 export function yes(raw) {
   const v = cleanInput(raw).toLowerCase()
-  return ['/ya', 'ya', '/iya', 'iya', 'y', '/y', '1'].includes(v)
+  return ['.ya', '.iya', '.y', '/ya', 'ya', '/iya', 'iya', 'y', '/y', '1'].includes(v)
 }
 
 export function no(raw) {
   const v = cleanInput(raw).toLowerCase()
-  return ['/tidak', 'tidak', 't', '/t', '2', '/batal', 'batal'].includes(v)
+  return ['.tidak', '.t', '.batal', '/tidak', 'tidak', 't', '/t', '2', '/batal', 'batal'].includes(v)
 }

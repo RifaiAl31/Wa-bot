@@ -82,7 +82,7 @@ function editMenu() {
     ['7', 'lokasi', t.lokasi], ['8', 'peserta', t.peserta], ['9', 'materi', t.materi],
   ]
   return ['✏️ *EDIT TEMPLATE NGAJI*', '', ...rows.map(([n, label, value]) => `${n}. ${label}: ${value}`),
-    '', 'Ketik nomor/bagian yang diubah, lalu isi nilainya.', 'Ketik /selesai bila cukup atau /batal untuk membatalkan.'].join('\n')
+    '', 'Ketik nomor/bagian yang diubah, lalu isi nilainya.', 'Ketik .selesai bila cukup atau .batal untuk membatalkan.'].join('\n')
 }
 
 function scheduleMenu() {
@@ -93,33 +93,33 @@ function scheduleMenu() {
 export async function showTemplate(ctx) {
   const t = ngaji.getTemplate()
   const s = ngaji.getSchedule()
-  return reply(ctx, `${ngaji.templateSummary(t, s)}\n\nKetik /previewngaji untuk melihat pesan lengkap.`)
+  return reply(ctx, `${ngaji.templateSummary(t, s)}\n\nKetik .previewngaji untuk melihat pesan lengkap.`)
 }
 
 export async function setNgaji(ctx, arg = '') {
   if (cleanInput(arg).toLowerCase() === 'baru') {
     ngaji.resetTemplate(ctx.adminJid)
-    return reply(ctx, `Template pengajian dikembalikan ke nilai awal.\n\n${ngaji.templateSummary()}\n\nGunakan /editngaji untuk mengubah, /aturngaji untuk jadwal.`)
+    return reply(ctx, `Template pengajian dikembalikan ke nilai awal.\n\n${ngaji.templateSummary()}\n\nGunakan .editngaji untuk mengubah, .aturngaji untuk jadwal.`)
   }
   const t = ngaji.getTemplate()
   ngaji.getSchedule()
-  return reply(ctx, `Template pengajian siap digunakan.\n\n${ngaji.templateSummary(t, ngaji.getSchedule())}\n\nKetik /editngaji untuk mengubah atau /aturngaji untuk mengatur jadwal.`)
+  return reply(ctx, `Template pengajian siap digunakan.\n\n${ngaji.templateSummary(t, ngaji.getSchedule())}\n\nKetik .editngaji untuk mengubah atau .aturngaji untuk mengatur jadwal.`)
 }
 
 export async function previewNgaji(ctx) {
   const s = ngaji.getSchedule()
   const date = ngaji.nextEventDate(s)
-  if (!date) return reply(ctx, 'Jadwal kegiatan belum valid. Ketik /aturngaji dulu.')
+  if (!date) return reply(ctx, 'Jadwal kegiatan belum valid. Ketik .aturngaji dulu.')
   return reply(ctx, ['🔍 *PREVIEW — BELUM DIKIRIM*', '', ngaji.renderNgaji(date), '', `Rencana kirim: ${ngaji.addDays(date, -Number(s.send_lead_days || 0))} pukul ${String(s.send_time).replace(':', '.')} WIB`].join('\n'))
 }
 
 export async function sendNgajiCommand(ctx) {
   const s = ngaji.getSchedule()
   const date = ngaji.nextEventDate(s)
-  if (!date) return reply(ctx, 'Belum ada tanggal kegiatan yang valid. Ketik /aturngaji dulu.')
-  if (!ngaji.getTargets().length) return reply(ctx, 'Belum ada grup tujuan. Ketik /aturngaji untuk menentukan grup.')
+  if (!date) return reply(ctx, 'Belum ada tanggal kegiatan yang valid. Ketik .aturngaji dulu.')
+  if (!ngaji.getTargets().length) return reply(ctx, 'Belum ada grup tujuan. Ketik .aturngaji untuk menentukan grup.')
   flows.set(flowKey(ctx), { type: 'ngaji_send', data: { eventDate: date } })
-  return reply(ctx, ['🔍 *KONFIRMASI PENGIRIMAN NGAJI*', '', ngaji.renderNgaji(date), '', `Tanggal kegiatan: ${date}`, 'Ketik /ya untuk kirim sekarang atau /batal untuk membatalkan.'].join('\n'))
+  return reply(ctx, ['🔍 *KONFIRMASI PENGIRIMAN NGAJI*', '', ngaji.renderNgaji(date), '', `Tanggal kegiatan: ${date}`, 'Ketik .ya untuk kirim sekarang atau .batal untuk membatalkan.'].join('\n'))
 }
 
 export async function jadwalNgaji(ctx) {
@@ -148,13 +148,13 @@ export async function handleNgajiFlow(ctx, cmd, arg) {
   const text = cleanInput(ctx.text)
 
   // Perintah lain tidak boleh tersedot oleh sesi ngaji yang tertinggal.
-  const FLOW_CMDS = ['/ya', '/iya', '/y', '/batal', '/selesai', '/tidak', '/t']
+  const FLOW_CMDS = ['.ya', '.iya', '.y', '.batal', '.selesai', '.tidak', '.t']
   if (cmd && !FLOW_CMDS.includes(cmd)) {
     flows.delete(key)
     return false
   }
 
-  if (cmd === '/batal' || no(cmd)) {
+  if (cmd === '.batal' || no(cmd)) {
     flows.delete(key)
     await reply(ctx, 'Proses pengajian dibatalkan. Tidak ada perubahan yang disimpan.')
     return true
@@ -168,7 +168,7 @@ export async function handleNgajiFlow(ctx, cmd, arg) {
 
 async function handleSendFlow(ctx, flow, cmd, key) {
   if (!yes(cmd)) {
-    await reply(ctx, 'Pengiriman dibatalkan. Ketik /sendngaji untuk mencoba lagi.')
+    await reply(ctx, 'Pengiriman dibatalkan. Ketik .sendngaji untuk mencoba lagi.')
     flows.delete(key)
     return true
   }
@@ -214,15 +214,15 @@ async function handleEditFlow(ctx, flow, cmd, arg, key) {
     const result = applyEditValue(ctx, flow.data.field, arg || ctx.text)
     if (result.error) return reply(ctx, result.error)
     flows.delete(key)
-    return reply(ctx, `Template diperbarui: ${Object.keys(result.patch).join(', ')}\n\n${ngaji.templateSummary()}\n\nKetik /editngaji untuk ubah lagi.`)
+    return reply(ctx, `Template diperbarui: ${Object.keys(result.patch).join(', ')}\n\n${ngaji.templateSummary()}\n\nKetik .editngaji untuk ubah lagi.`)
   }
-  if (cmd === '/selesai') {
+  if (cmd === '.selesai') {
     flows.delete(key)
     return reply(ctx, `Edit template selesai.\n\n${ngaji.templateSummary()}`)
   }
   const field = editChoice(arg || text)
   if (!field) {
-    await reply(ctx, `Bagian tidak dikenal. Ketik /batal untuk keluar.\n\n${editMenu()}`)
+    await reply(ctx, `Bagian tidak dikenal. Ketik .batal untuk keluar.\n\n${editMenu()}`)
     return true
   }
   flow.data.field = field
@@ -311,7 +311,7 @@ async function handleScheduleFlow(ctx, flow, cmd, arg, key) {
       `Jam kegiatan: ${d.event_time.replace(':', '.')} WIB`,
       `Kirim: ${sendDate} pukul ${d.send_time.replace(':', '.')} WIB`,
       `Grup tujuan (${targets.length}): ${targets.map((j) => groupService.get(j)?.name || j).join(', ')}`,
-      '', 'Ketik /ya untuk simpan atau /batal.',
+      '', 'Ketik .ya untuk simpan atau .batal.',
     ].join('\n'))
   }
   return false

@@ -328,7 +328,7 @@ export function createApp({ bot, scheduler }) {
   })
 
   app.get('/api/app/info', (_req, res) => res.json({
-    name: 'KAYY ASSISTANT', author: 'Dev RifaiAl', version: config.appVersion,
+    name: 'LUX BOT', author: 'Dev By Rifai', version: config.appVersion,
     timezone: config.timezone, downloader: config.downloaderEnabled,
   }))
   app.get('/api/weather', async (_req, res) => res.json(await getCurrentWeather()))

@@ -1,9 +1,9 @@
 import { createCanvas } from '@napi-rs/canvas'
-import { COMMAND_GROUPS } from './registry.js'
+import { COMMAND_GROUPS, buildMenuText, commandIsVisible, normalizeCommand } from './registry.js'
 import { roleOf } from '../services/roleService.js'
 import { featureService } from '../services/featureService.js'
 import { getCurrentWeather } from '../services/weatherService.js'
-import { normalizeJid } from '../config.js'
+import { config, normalizeJid } from '../config.js'
 import { fillRoundRect, fitText, FONT } from '../images/engine.js'
 
 const menuChoices = new Map()
@@ -25,19 +25,24 @@ export function jakartaClock(date = new Date()) {
 
 const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
 
-export function visibleCommands(role) {
+export function visibleCommands(role, options = {}) {
   const out = []
   for (const group of COMMAND_GROUPS) {
     for (const item of group.commands) {
-      if (item.admin && role !== 'ADMIN') continue
-      if (item.vip && !['ADMIN', 'VIP'].includes(role)) continue
+      if (!commandIsVisible(item, {
+        ...options,
+        admin: role === 'ADMIN',
+        vip: ['ADMIN', 'VIP'].includes(role),
+      })) continue
       out.push(item)
     }
   }
-  return [...new Map(out.map((x) => [x.cmd, x])).values()]
+  return out
 }
 
-export function countCommands(role) { return visibleCommands(role).length }
+export function countCommands(role, options = {}) {
+  return new Set(visibleCommands(role, options).map((item) => item.cmd)).size
+}
 
 function drawText(ctx, text, x, y, maxWidth, size, color, weight = '400') {
   const fitted = fitText(ctx, String(text ?? ''), maxWidth, {
@@ -77,7 +82,7 @@ function renderMenuCard(menu) {
   ctx.beginPath()
   ctx.arc(98, 112, 13, 0, Math.PI * 2)
   ctx.fill()
-  drawText(ctx, 'KAYY ASSISTANT', 132, 124, 590, 45, '#f3f7f8', '700')
+  drawText(ctx, 'LUX BOT', 132, 124, 590, 45, '#f3f7f8', '700')
   drawText(ctx, 'WHATSAPP BOT  •  MENU UTAMA', 134, 166, 560, 22, '#9cb2b8', '500')
 
   fillRoundRect(ctx, 806, 87, 190, 62, 31, menu.online ? '#163b37' : '#45252b')
@@ -129,7 +134,13 @@ export async function buildPersonalMenu(ctx) {
   const clock = jakartaClock()
   const weather = await getCurrentWeather()
   const features = featureService.countActiveFeatures(role)
-  const commands = countCommands(role)
+  const menuOptions = {
+    admin: role === 'ADMIN',
+    vip: ['ADMIN', 'VIP'].includes(role),
+    privateChat: !ctx.isGroup,
+    privateCommands: config.privateDotCommands.map(normalizeCommand).filter(Boolean),
+  }
+  const commands = countCommands(role, menuOptions)
   const account = 'ACTIVE'
   const botStatus = ctx.bot?.status?.() || {}
   const online = botStatus.connected !== false
@@ -143,31 +154,13 @@ export async function buildPersonalMenu(ctx) {
     const minutes = Math.floor((total % 3600) / 60)
     return days ? `${days} hari ${hours} jam ${minutes} menit` : `${hours} jam ${minutes} menit`
   })()
-  const commandLines = COMMAND_GROUPS.flatMap((group) => {
-    const items = group.commands.filter((item) =>
-      (!item.admin || role === 'ADMIN') &&
-      (!item.vip || ['ADMIN', 'VIP'].includes(role))
-    )
-    if (!items.length) return []
-    return [
-      '',
-      group.title,
-      ...items.map((item) => {
-        const access = item.admin ? ' (Admin)' : item.vip ? ' (VIP)' : ''
-        return `• ${item.usage} — ${item.desc}${access}`
-      }),
-    ]
-  })
-
   const lines = [
-    '📚 *DAFTAR PERINTAH*',
-    'Pilih perintah dari kategori berikut:',
-    ...commandLines,
+    buildMenuText(menuOptions),
     '',
-    'Shortcut: 1. .list  |  2. .ask  |  3. .user',
-    'Ketik angka shortcut atau command secara langsung.',
-    '',
-    'KAYY ASSISTANT — Powered by Dev RifaiAl',
+    '🎯 *SHORTCUT MENU*',
+    ...(ctx.isGroup
+      ? ['Shortcut: 1. .list  |  2. .ask  |  3. .user', 'Ketik angka hanya setelah menu grup dibuka.']
+      : ['Shortcut angka hanya aktif setelah menu dibuka di grup.']),
   ]
   return {
     text: lines.join('\n'),
@@ -199,17 +192,20 @@ export function consumeMenuChoice(ctx, text) {
   const key = `${ctx.jid}|${ctx.adminJid}`
   const entry = menuChoices.get(key)
   if (!entry) return null
-  menuChoices.delete(key)
-  if (entry.expiresAt < Date.now()) return null
+  if (entry.expiresAt < Date.now()) {
+    menuChoices.delete(key)
+    return null
+  }
   const index = Number(String(text || '').trim())
   if (!Number.isInteger(index) || index < 1 || index > entry.choices.length) return null
+  menuChoices.delete(key)
   return entry.choices[index - 1]
 }
 
 export async function sendPersonalMenu(ctx) {
   const menu = await buildPersonalMenu(ctx)
   const card = renderMenuCard(menu)
-  setMenuChoices(ctx, ['.list', '.ask', '.user'])
+  if (ctx.isGroup) setMenuChoices(ctx, ['.list', '.ask', '.user'])
   await ctx.sock.sendMessage(ctx.jid, {
     image: card,
     mimetype: 'image/png',

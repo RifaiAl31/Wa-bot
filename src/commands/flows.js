@@ -91,7 +91,7 @@ export async function handleFlow(ctx, cmd, arg) {
   if (!flow) return false
   const text = ctx.text.trim()
 
-  if (cmd === '/batal') {
+  if (cmd === '.batal') {
     if (flow.type === 'edit') editService.cancel(ctx.adminJid)
     flows.delete(key)
     await reply(ctx, 'Proses dibatalkan. Tidak ada perubahan yang disimpan.')
@@ -114,16 +114,16 @@ async function handleCreate(ctx, flow, cmd, arg, key) {
         weekday: d.weekday, week: d.week, time: d.time, targets: d.targets,
       }, ctx.adminJid, ctx.jid)
       flows.delete(key)
-      await reply(ctx, `Pengumuman berhasil disimpan dengan ID ${id}.\n\n${draftSummary(d)}\n\nKetik /list untuk melihat semua pengumuman.`)
+      await reply(ctx, `Pengumuman berhasil disimpan dengan ID ${id}.\n\n${draftSummary(d)}\n\nKetik .list untuk melihat semua pengumuman.`)
     } else {
-      await reply(ctx, 'Penyimpanan dibatalkan. Gunakan /set untuk memulai lagi.')
+      await reply(ctx, 'Penyimpanan dibatalkan. Gunakan .set untuk memulai lagi.')
       flows.delete(key)
     }
     return true
   }
 
-  if (cmd && !['/selesai'].includes(cmd)) {
-    await reply(ctx, `Masih dalam proses pembuatan (tahap ${flow.step}). Ketik /batal untuk membatalkan.`)
+  if (cmd && !['.selesai'].includes(cmd)) {
+    await reply(ctx, `Masih dalam proses pembuatan (tahap ${flow.step}). Ketik .batal untuk membatalkan.`)
     return true
   }
 
@@ -177,7 +177,7 @@ async function handleCreate(ctx, flow, cmd, arg, key) {
       d.targets = targets
       flow.step = 'confirm'
       const names = targets.map((j) => groupService.get(j)?.name || j).join(', ')
-      await reply(ctx, `PRIVIEW PENGUMUMAN\n\n${d.body}\n\n--- Informasi (tidak ikut dikirim) ---\nJudul: ${d.title}\nJadwal: ${dayName(d.weekday)} / ${weekName(d.week)} / ${timeName(d.time)}\nGrup: ${names}\n\nKetik /ya untuk menyimpan atau /batal untuk membatalkan.`)
+      await reply(ctx, `PRIVIEW PENGUMUMAN\n\n${d.body}\n\n--- Informasi (tidak ikut dikirim) ---\nJudul: ${d.title}\nJadwal: ${dayName(d.weekday)} / ${weekName(d.week)} / ${timeName(d.time)}\nGrup: ${names}\n\nKetik .ya untuk menyimpan atau .batal untuk membatalkan.`)
       break
     }
   }
@@ -188,10 +188,10 @@ async function handleEdit(ctx, flow, cmd, arg, key) {
   const session = editService.get(ctx.adminJid)
   if (!session) { flows.delete(key); return false }
 
-  if (cmd === '/update' || cmd === '/selesai') {
+  if (cmd === '.update' || cmd === '.selesai') {
     const diff = editService.diff(ctx.adminJid)
     if (!diff || !diff.changes.length) {
-      await reply(ctx, 'Tidak ada perubahan pada draf. Sesi edit tetap aktif; ubah salah satu bagian lalu ketik /update.')
+      await reply(ctx, 'Tidak ada perubahan pada draf. Sesi edit tetap aktif; ubah salah satu bagian lalu ketik .update.')
       return true
     }
     const lines = diff.changes.map((c) => {
@@ -201,7 +201,7 @@ async function handleEdit(ctx, flow, cmd, arg, key) {
     })
     editService.setStep(ctx.adminJid, 'confirm_update')
     flow.step = 'confirm_update'
-    await reply(ctx, `RINGKASAN PERUBAHAN ${diff.id}\n\n${lines.join('\n')}\n\nKetik /ya untuk menyimpan perubahan, atau /batal untuk membuang draf.`)
+    await reply(ctx, `RINGKASAN PERUBAHAN ${diff.id}\n\n${lines.join('\n')}\n\nKetik .ya untuk menyimpan perubahan, atau .batal untuk membuang draf.`)
     return true
   }
 
@@ -211,7 +211,7 @@ async function handleEdit(ctx, flow, cmd, arg, key) {
       flows.delete(key)
       await reply(ctx, `Perubahan ${id} berhasil disimpan. Jadwal dan grup tujuan telah diperbarui. Riwayat perubahan dicatat.`)
     } else {
-      await reply(ctx, 'Perubahan tidak disimpan. Ketik /update untuk melihat ringkasan lagi, atau /batal untuk membuang draf.')
+      await reply(ctx, 'Perubahan tidak disimpan. Ketik .update untuk melihat ringkasan lagi, atau .batal untuk membuang draf.')
     }
     return true
   }
@@ -228,13 +228,13 @@ async function handleEdit(ctx, flow, cmd, arg, key) {
     const draft = editService.get(ctx.adminJid).payload.draft
     flow.field = null
     flow.step = 'select_field'
-    await reply(ctx, `${FIELD_LABELS[Object.keys(patch)[0]]} diperbarui pada draf (belum disimpan).\n\n${draftSummary(draft)}\n\nKetik nomor/ nama bagian lain untuk mengubah, /update untuk melihat perubahan, atau /batal.`)
+    await reply(ctx, `${FIELD_LABELS[Object.keys(patch)[0]]} diperbarui pada draf (belum disimpan).\n\n${draftSummary(draft)}\n\nKetik nomor/ nama bagian lain untuk mengubah, .update untuk melihat perubahan, atau .batal.`)
     return true
   }
 
   const selected = resolveFieldChoice(ctx.text)
   if (!selected) {
-    await reply(ctx, `Pilih bagian yang ingin diubah (1-6):\n${FIELD_ORDER.map((f, i) => `${i + 1}. ${FIELD_LABELS[f]}`).join('\n')}\n\nKetik /update setelah selesai.`)
+    await reply(ctx, `Pilih bagian yang ingin diubah (1-6):\n${FIELD_ORDER.map((f, i) => `${i + 1}. ${FIELD_LABELS[f]}`).join('\n')}\n\nKetik .update setelah selesai.`)
     return true
   }
   flow.field = selected
@@ -261,7 +261,7 @@ async function handleReschedule(ctx, flow, cmd, arg, key) {
     }
     return true
   }
-  if (cmd) { await reply(ctx, 'Sedang mengatur jadwal. Ketik /batal untuk membatalkan.'); return true }
+  if (cmd) { await reply(ctx, 'Sedang mengatur jadwal. Ketik .batal untuk membatalkan.'); return true }
 
   if (flow.step === 'day') {
     const v = parseDay(ctx.text)
@@ -277,7 +277,7 @@ async function handleReschedule(ctx, flow, cmd, arg, key) {
     const v = parseTime(ctx.text)
     if (v === null) { await reply(ctx, 'Jam tidak valid. Contoh: 19.00.'); return true }
     flow.data.time = v; flow.step = 'confirm'
-    await reply(ctx, `Jadwal baru ${flow.id}: ${dayName(flow.data.weekday)} / ${weekName(flow.data.week)} / ${timeName(flow.data.time)}.\n\nKetik /ya untuk menyimpan atau /batal.`)
+    await reply(ctx, `Jadwal baru ${flow.id}: ${dayName(flow.data.weekday)} / ${weekName(flow.data.week)} / ${timeName(flow.data.time)}.\n\nKetik .ya untuk menyimpan atau .batal.`)
   }
   return true
 }

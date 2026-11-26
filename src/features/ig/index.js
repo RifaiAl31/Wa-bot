@@ -557,7 +557,7 @@ export async function handleIgCommand(ctx, cmd, arg = '') {
     if (!Buffer.isBuffer(buffer)) return buffer // pesan bantuan dari reply()
     await ctx.sock.sendMessage(ctx.jid, {
       image: buffer,
-      caption: `${LABEL}\nMockup dibuat lokal oleh KAYY ASSISTANT — By Dev RifaiAl`,
+      caption: `${LABEL}\nMockup dibuat lokal oleh LUX BOT — Dev By Rifai`,
     }, { quoted: ctx.message })
     return { ok: true }
   } catch (err) {

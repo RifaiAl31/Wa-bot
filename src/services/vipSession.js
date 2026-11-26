@@ -61,7 +61,7 @@ export function startSession(jid, aliases = [], chatJid = null) {
   if (!key) return null
 
   const existing = toSession(findRow(key))
-  // Idempoten: pesan /vip duplikat tidak membuat sesi baru atau mereset attempts.
+  // Idempoten: pesan .vip duplikat tidak membuat sesi baru atau mereset attempts.
   if (existing) {
     logger.info(`VIP session reused: ${key}`)
     return existing

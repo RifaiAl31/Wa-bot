@@ -67,8 +67,8 @@ export function createAnnouncement(data, adminJid = null, groupJid = null) {
   return id
 }
 
-// Pembuatan instan: /set <teks> langsung menyimpan isi apa adanya.
-// Default NONAKTIF agar tidak terkirim otomatis; kirim manual lewat /send ID.
+// Pembuatan instan: .set <teks> langsung menyimpan isi apa adanya.
+// Default NONAKTIF agar tidak terkirim otomatis; kirim manual lewat .send ID.
 export function createQuickAnnouncement(body, adminJid = null, groupJid = null, targets = []) {
   const text = String(body ?? '').trim()
   if (!text) throw new Error('Isi pengumuman tidak boleh kosong')

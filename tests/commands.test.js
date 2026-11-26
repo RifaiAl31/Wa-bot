@@ -19,9 +19,9 @@ async function send(text, opts = {}) {
   return sock.sent.slice(before).map((s) => s.text).join('\n')
 }
 
-test('alur /set lengkap sampai tersimpan dengan isi pesan utuh', async () => {
+test('alur .set lengkap sampai tersimpan dengan isi pesan utuh', async () => {
   const body = 'Assalamu\'alaikum Wr. Wb.\n\nDiberitahukan kerja bakti.\nHari: Minggu\n\nTerima kasih.'
-  await send('/set')
+  await send('.set')
   await send('Pengumuman Kerja Bakti')
   await send(body)
   await send('0') // Minggu
@@ -30,43 +30,57 @@ test('alur /set lengkap sampai tersimpan dengan isi pesan utuh', async () => {
   const preview = await send('1')
   assert.match(preview, /PRIVIEW PENGUMUMAN/)
   assert.match(preview, /Grup Uji/)
-  const saved = await send('/ya')
+  const saved = await send('.ya')
   assert.match(saved, /A1/)
   assert.equal(getAnnouncement('A1').body, body)
   assert.deepEqual(getTargets('A1').map((g) => g.jid), [GROUP])
 })
 
-test('/edit → /update → /ya hanya menyimpan setelah konfirmasi', async () => {
-  await send('/edit A1')
+test('.detail, .preview, .jadwal, dan .aturjadwal berjalan dengan prefix titik', async () => {
+  assert.match(await send('.detail A1'), /Detail A1/)
+  assert.match(await send('.preview A1'), /PREVIEW A1/)
+  assert.match(await send('.jadwal'), /JADWAL PENGUMUMAN/)
+
+  await send('.aturjadwal A1')
+  await send('5')
+  await send('3')
+  await send('10.30')
+  const saved = await send('.ya')
+  assert.match(saved, /Jadwal A1 diperbarui/)
+  assert.match(await send('.jadwal'), /Jumat/)
+})
+
+test('.edit → .update → .ya hanya menyimpan setelah konfirmasi', async () => {
+  await send('.edit A1')
   await send('1')
   await send('Judul Revisi')
   assert.equal(getAnnouncement('A1').title, 'Pengumuman Kerja Bakti')
-  const diff = await send('/update')
+  const diff = await send('.update')
   assert.match(diff, /RINGKASAN PERUBAHAN/)
   assert.match(diff, /Judul Revisi/)
   assert.equal(getAnnouncement('A1').title, 'Pengumuman Kerja Bakti')
-  const done = await send('/ya')
+  const done = await send('.ya')
   assert.match(done, /berhasil disimpan/)
   assert.equal(getAnnouncement('A1').title, 'Judul Revisi')
   assert.equal(editService.get(ADMIN), null)
 })
 
-test('/batal membuang sesi edit', async () => {
-  await send('/edit A1')
+test('.batal membuang sesi edit', async () => {
+  await send('.edit A1')
   await send('2')
   await send('Isi baru yang dibatalkan')
-  await send('/batal')
+  await send('.batal')
   assert.equal(getAnnouncement('A1').body.startsWith('Assalamu'), true)
   assert.equal(editService.get(ADMIN), null)
 })
 
-test('/update tanpa sesi ditolak', async () => {
-  const out = await send('/update')
+test('.update tanpa sesi ditolak', async () => {
+  const out = await send('.update')
   assert.match(out, /ditolak/)
 })
 
 test('daftar grup hanya untuk admin', async () => {
-  const out = await send('/grup', { adminJid: '628999999999@s.whatsapp.net', admin: false })
+  const out = await send('.grup', { adminJid: '628999999999@s.whatsapp.net', admin: false })
   assert.match(out, /hanya dapat dilihat admin terdaftar/)
   assert.equal(get("SELECT * FROM activity_logs WHERE action='unauthorized_command'") !== undefined, true)
 })
@@ -76,7 +90,7 @@ const { config } = await import('../src/config.js')
 test('anggota biasa boleh memakai perintah selain daftar grup', async () => {
   config.openAccess = true
   try {
-    const out = await send('/list', { adminJid: '628999999999@s.whatsapp.net', admin: false })
+    const out = await send('.list', { adminJid: '628999999999@s.whatsapp.net', admin: false })
     assert.doesNotMatch(out, /hanya untuk admin terdaftar/)
     assert.match(out, /A1/)
   } finally {
@@ -85,9 +99,9 @@ test('anggota biasa boleh memakai perintah selain daftar grup', async () => {
 })
 
 let quickId = null
-test('/set <teks> langsung menyimpan isi utuh dan /list menampilkan kode + isi', async () => {
+test('.set <teks> langsung menyimpan isi utuh dan .list menampilkan kode + isi', async () => {
   const body = '*PENGUMUMAN*\n\n📌 *Pengajian Muda-Mudi*\n📅 : sabtu 21 November 2026\n🕌 : Torikunnajjah'
-  const out = await send(`/set ${body}`)
+  const out = await send(`.set ${body}`)
   assert.match(out, /PENGUMUMAN TERSIMPAN \(mode cepat\)/)
   quickId = /A\d+/.exec(out)?.[0]
   assert.ok(quickId)
@@ -96,26 +110,34 @@ test('/set <teks> langsung menyimpan isi utuh dan /list menampilkan kode + isi',
   assert.equal(row.is_active, 0)
   assert.deepEqual(getTargets(quickId).map((g) => g.jid), [GROUP])
 
-  const list = await send('/list')
+  const list = await send('.list')
   assert.match(list, new RegExp(quickId))
   assert.match(list, /Pengajian Muda-Mudi/)
   assert.match(list, /Isi pesan:/)
 })
 
-test('/send Ax mengirim manual isi pesan apa adanya', async () => {
+test('.send Ax mengirim manual isi pesan apa adanya', async () => {
   const short = quickId
-  const out = await send(`/send ${short}`)
+  const out = await send(`.kirim ${short}`)
   assert.doesNotMatch(out, /HASIL PENGIRIMAN|Mengirim /, 'status hanya reaction, bukan pesan')
   const body = getAnnouncement(quickId).body
   assert.equal(sock.sent.some((s) => s.jid === GROUP && s.text === body), true)
 })
 
 test('perintah lain: list, search, aktifkan, hapus dengan konfirmasi', async () => {
-  assert.match(await send('/list'), /A1/)
-  assert.match(await send('/search kerja'), /A1/)
-  assert.match(await send('/nonaktifkan A1'), /NONAKTIF/)
-  assert.match(await send('/aktifkan A1'), /AKTIF/)
-  assert.match(await send('/hapus A1'), /YAKIN MENGHAPUS/)
-  await send('/ya')
+  assert.match(await send('.list'), /A1/)
+  assert.match(await send('.search kerja'), /A1/)
+  assert.match(await send('.nonaktifkan A1'), /NONAKTIF/)
+  assert.match(await send('.aktifkan A1'), /AKTIF/)
+  assert.match(await send('.hapus A1'), /YAKIN MENGHAPUS/)
+  await send('.ya')
   assert.equal(getAnnouncement('A1'), undefined)
+})
+
+test('prefix lama tetap diterima sementara tanpa membuat handler kedua', async () => {
+  const out = await send('/set Kompatibilitas prefix lama')
+  assert.match(out, /PENGUMUMAN TERSIMPAN/)
+  const id = /ID: (A\d+)/.exec(out)?.[1]
+  assert.ok(id)
+  assert.equal(getAnnouncement(id).body, 'Kompatibilitas prefix lama')
 })

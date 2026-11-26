@@ -1,72 +1,120 @@
-# KAYY ASSISTANT — Command Reference
+# LUX BOT — Command Reference
 
-Powered by Dev RifaiAl · Timezone Asia/Jakarta
+**Dev By Rifai** · Zona waktu Asia/Jakarta
 
-Semua command baru memakai prefix `.`. Command lama berprefix `/` tetap diterima sebagai alias agar tidak merusak otomasi yang sudah ada.
+Semua command resmi memakai prefix titik. Prefix lama tetap diterima sementara di grup untuk kompatibilitas; private chat hanya menerima command yang diawali titik. Menu private hanya menampilkan command yang diizinkan di private chat. Prefix lama tidak ditampilkan pada menu. Daftar menu dibuat dari metadata command di `src/commands/registry.js`; fitur berizin admin/VIP dan fitur AI tanpa API aktif disesuaikan dengan akses dan konfigurasi.
 
-## Role
-
-| Role | Sumber identitas | Hak |
-|---|---|---|
-| ADMIN | Nomor terdaftar di tabel `admins` (bukan `OPEN_ACCESS`, bukan nama kontak) | Kontrol penuh, AI management, grup, sistem, VIP |
-| VIP | Tabel `vip_users` (bisa punya `expires_at`) | Semua fitur USER + downloader publik; tidak bisa konfigurasi AI/bot |
-| USER | Pengirim terdaftar WhatsApp | Fitur umum: menu, identitas, ping, AI, PDF, gambar, quote, `.rvo` |
-
-Identitas selalu berdasarkan WhatsApp JID yang dinormalisasi ke nomor.
-
-## Command umum
+## 👤 Menu utama
 
 | Command | Fungsi |
 |---|---|
-| `.menu` | Kartu ringkasan visual (role, mode, waktu, runtime, cuaca, statistik), lalu daftar kategori/command sesuai role |
-| `.help` | Bantuan singkat |
-| `.user` | JID, nomor, role, status akun, mode GROUP/PRIVATE |
-| `.vip` | Informasi/aktivasi VIP (private chat didukung) |
-| `.ping` | Response time, status bot/server/WhatsApp, uptime, waktu WIB |
+| `.menu` | Kartu ringkasan dan menu lengkap |
+| `.help` | Menu bantuan |
+| `.user` | JID, nomor, role, dan status akun |
+| `.vip` | Informasi atau aktivasi VIP |
+| `.ping` | Status bot dan waktu respons |
 | `.status` | Status koneksi WhatsApp |
-| `.info` | Versi aplikasi, fitur aktif, role, timezone |
+| `.info` | Informasi bot, versi, dan fitur aktif |
 
-## Command pengumuman & AI
-
-Command lama `/set`, `/list`, `/detail A1`, `/edit`, `/update`, `/batal`, `/send`, `/preview`, `/hapus`, `/search`, `/jadwal`, `/aturjadwal`, `/aktifkan`, `/nonaktifkan`, `/ask`, `/models`, `/model` tetap berfungsi.
-
-## Media
+## 📢 Pengumuman
 
 | Command | Fungsi |
 |---|---|
-| `.pdf` | Membaca PDF dari caption/reply |
-| `.img` | Analisis gambar via vision model |
-| `.iqc`, `.iqc2`, `.iqc5`, `.iqcdark`, `.iqcpink`, `.iqcpinkv2`, `.iqcmerah` | Mockup iPhone quote berbagai palet; `.iqc` mendukung foto reply dan `--raw` |
-| `.tqc`, `.tiktokchat`, `.wq`, `.iqcwin`, `.ytcomment` | Mockup chat TikTok, Windows Classic, dan komentar YouTube; avatar dapat memakai reply gambar |
-| `.igqc`, `.igpost`, `.igstory`, `.igprofile`, `.igdm`, `.ignote` | Mockup Instagram iOS, bukan screenshot/komentar asli |
-| `.rvo` | Meneruskan foto biasa yang dikirim eksplisit dengan caption `.rvo` atau reply. File sekali lihat ditolak; file sementara dihapus. |
+| `.set` | Wizard membuat pengumuman |
+| `.set <teks>` | Menyimpan pengumuman langsung |
+| `.list` | Daftar pengumuman dan isi |
+| `.detail A1` | Detail pengumuman |
+| `.edit A1` | Membuat draf perubahan |
+| `.update` | Meninjau perubahan draf |
+| `.batal` | Membatalkan proses |
+| `.send A1` | Mengirim pengumuman; alias `.kirim` |
+| `.preview A1` | Pratinjau pesan |
+| `.hapus A1` | Menghapus setelah konfirmasi |
+| `.search KATA` | Mencari pengumuman |
 
-## Downloader publik (VIP/ADMIN)
+## 📅 Penjadwalan
 
 | Command | Fungsi |
 |---|---|
-| `.tiktok <link>` | Media TikTok publik |
-| `.instagram <link>` | Media Instagram publik |
+| `.jadwal` | Melihat jadwal |
+| `.aturjadwal A1` | Mengatur jadwal |
+| `.aktifkan A1` | Mengaktifkan pengumuman terjadwal |
+| `.nonaktifkan A1` | Menonaktifkan pengumuman terjadwal |
 
-Ketentuan:
+## 👥 Manajemen grup
 
-- Hanya `https`, domain resmi, tanpa kredensial, tanpa IP privat (SSRF guard).
-- Butuh `yt-dlp` terpasang di Termux: `pkg install python && pip install yt-dlp`.
-- Tanpa API key. Tidak menjamin keberhasilan bila platform mengubah sistemnya.
-- Tidak mengakses akun privat, login, atau DRM.
-- Watermark/atribusi karya orang lain tidak dihapus.
-- Rate limit default 5 permintaan/10 menit/user; ukuran maksimal 50 MB; timeout 120 detik.
+Command pengelolaan daftar grup hanya untuk admin bot terdaftar. Bot tidak perlu menjadi admin WhatsApp untuk memperbarui daftar internal; izin kirim ke grup tetap mengikuti aturan WhatsApp.
 
-## Interactive menu
+| Command | Fungsi |
+|---|---|
+| `.grup` | Daftar grup yang dapat diakses bot (admin) |
+| `.grupaktif` | Daftar grup terdaftar (admin) |
+| `.daftargrup N` | Mendaftarkan grup nomor N (admin) |
+| `.nondaftargrup N` | Mencabut pendaftaran grup N (admin) |
 
-Baileys 6.7.24 tidak mendukung pengiriman tombol interaktif native. Menu menampilkan maksimal **3 pilihan bernomor** sebagai fallback. Ketik `1`, `2`, atau `3` untuk langsung menjalankan command yang sesuai.
+## 👑 VIP
 
-## Akses grup
+| Command | Fungsi |
+|---|---|
+| `.vip` | Informasi/aktivasi VIP; ditampilkan juga di menu utama |
+| `.no vip @pengguna` | Mencabut VIP pengguna (admin) |
 
-Grup yang ditemukan otomatis **tidak diberi akses** sampai didaftarkan admin (`/daftargrup N` atau dashboard). Router memvalidasi izin grup sebelum handler apa pun dijalankan. Pesan dari grup tanpa izin diabaikan tanpa balasan.
+## ⬇️ Downloader
 
-## Branding
+| Command | Fungsi |
+|---|---|
+| `.tiktok <tautan>` | Mengunduh media TikTok publik (VIP/ADMIN) |
+| `.instagram <tautan>` | Mengunduh media Instagram publik (VIP/ADMIN) |
 
-KAYY ASSISTANT — Powered by Dev RifaiAl.
+## 🤖 AI Assistant
 
-Background menu dibuat programatis (`scripts/generate-menu-assets.js`) sehingga bebas hak cipta pihak ketiga. Video stock berwatermark tidak dipakai.
+| Command | Fungsi |
+|---|---|
+| `.ask <pertanyaan>` | Bertanya kepada AI |
+| `.models` | Daftar model gratis |
+| `.free` | Alias `.models` |
+| `.model [nomor]` | Melihat atau memilih model; pemilihan hanya untuk admin |
+
+Command AI dan analisis media ditampilkan bila penyedia AI telah dikonfigurasi.
+
+## 🕌 Islam
+
+`.ayat`, `.surah`, `.murottal`, `.asmaul`, `.zikir`, `.istighfar`, `.tahlil`, `.sholawat`, `.quotesislam`, `.doa`
+
+Alias yang tetap didukung: `.ayatpilihan`, `.alquran`, `.quran`, `.murrotal`, `.murotal`, `.audiosurah`, `.asmaulhusna`, `.dzikir`, `.shalawat`.
+
+## 📱 Instagram iOS mockup
+
+`.igqc`, `.igpost`, `.igstory`, `.igprofile`, `.igdm`, `.ignote`
+
+## 🧷 Sticker
+
+`.sticker`, `.s`, `.ttp`, `.attp`, `.brat`, `.qc`, `.toimg`, `.emojimix`, `.pack`
+
+## 🎨 Maker
+
+`.logo3d`, `.logogold`
+
+## 🧠 AI writing & coding
+
+`.aiwrite`, `.rewrite`, `.ringkas`, `.fixcode`, `.explaincode`, `.debug`
+
+## 📄 Dokumen dan gambar
+
+`.pdf`, `.img`, `.iqc`, `.iqc2`, `.iqc5`, `.iqcdark`, `.iqcpink`, `.iqcpinkv2`, `.iqcmerah`, `.tqc`, `.tiktokchat`, `.ytcomment`, `.wq`, `.iqcwin`, `.rvo`
+
+## 📚 Pengajian muda-mudi
+
+Command berikut hanya untuk admin bot terdaftar:
+
+`.template`, `.setngaji`, `.editngaji`, `.previewngaji`, `.sendngaji`, `.jadwalngaji`, `.aturngaji`, `.aktifngaji`, `.nonaktifngaji`
+
+## Private chat, grup, dan shortcut
+
+- Private chat hanya menjalankan command eksplisit berprefix titik yang diizinkan. Pesan biasa tidak memanggil AI atau command.
+- `.vip` dapat dimulai di grup dan dilanjutkan lewat private chat; pesan password hanya diproses ketika sesi VIP aktif.
+- Di grup, command memerlukan grup terdaftar. Command moderasi/pengelolaan grup memerlukan admin bot terdaftar.
+- AI tidak membalas pesan biasa di grup; gunakan `.ask` atau aturan mention yang dikonfigurasi.
+- Shortcut angka hanya berlaku setelah menu grup dikirim: `1` menjalankan `.list`, `2` menjalankan `.ask`, `3` menjalankan `.user`.
+
+ID pengumuman mendukung format `A1`, `A001`, dan ID legacy seperti `ANN-001`.

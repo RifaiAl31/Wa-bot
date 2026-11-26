@@ -26,7 +26,7 @@ export async function rvoCommand(ctx, arg = '') {
       '🖼️ *RVO MEDIA*', '',
       'Kirim foto biasa dengan caption `.rvo`, atau reply foto biasa dengan `.rvo`.',
       'Foto sekali lihat tidak diproses. File sementara dihapus setelah selesai.',
-      '', 'KAYY ASSISTANT — Powered by Dev RifaiAl',
+      '', 'LUX BOT — Dev By Rifai',
     ].join('\n'))
   }
   if (ctx.isGroup && !groupService.get(ctx.jid)?.is_registered) return
@@ -37,7 +37,7 @@ export async function rvoCommand(ctx, arg = '') {
     await ctx.sock.sendMessage(ctx.jid, {
       image: media.buffer,
       mimetype: target.content?.mimetype || 'image/jpeg',
-      caption: '🖼️ Foto diteruskan sesuai izin grup.\nKAYY ASSISTANT — By Dev RifaiAl',
+      caption: '🖼️ Foto diteruskan sesuai izin grup.\nLUX BOT — Dev By Rifai',
     })
     logger.info(`.rvo memproses gambar ${media.buffer.length} bytes untuk ${ctx.jid}`)
     return reply(ctx, '✅ Foto berhasil diteruskan. Kualitas asli dipertahankan.')

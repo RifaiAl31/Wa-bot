@@ -263,7 +263,7 @@ function validateChatInput(modelId, question) {
     throw new AIError('Model AI tidak tersedia.', 'not_found')
   }
   if (typeof question !== 'string' || !question.trim()) {
-    throw new AIError('Pertanyaan kosong. Contoh: /ask Apa itu AI Agent?', 'empty_question')
+    throw new AIError('Pertanyaan kosong. Contoh: .ask Apa itu AI Agent?', 'empty_question')
   }
   const tokens = Number(config.aiMaxAnswerTokens)
   if (!Number.isInteger(tokens) || tokens < 128) {
@@ -346,7 +346,7 @@ export async function askModel({ modelId, question, context = [] }) {
         continue
       }
       throw new AIError(result.finishReason === 'length'
-        ? 'Model menghabiskan batas token untuk berpikir. Coba lagi atau pilih model lain lewat /models.'
+        ? 'Model menghabiskan batas token untuk berpikir. Coba lagi atau pilih model lain lewat .models.'
         : EMPTY_ANSWER, 'empty')
     }
   }

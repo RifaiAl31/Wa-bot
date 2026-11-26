@@ -7,7 +7,7 @@ import {
 } from '../services/announcements.js'
 import { deliverAnnouncement } from '../services/delivery.js'
 import { withReaction } from './reactions.js'
-import { buildMenuText, RESTRICTED_COMMANDS } from './registry.js'
+import { buildMenuText, normalizeCommand, RESTRICTED_COMMANDS } from './registry.js'
 import { aiService } from '../ai/service.js'
 import { handleQuoteCommand } from '../images/generator.js'
 import * as imageEngine from '../images/engine.js'
@@ -42,52 +42,20 @@ import {
   formatAnnouncementDetail, DAY_CHOICES,
 } from '../utils/format.js'
 
-export const FLOW_COMMANDS = new Set(['/batal', '/ya', '/iya', '/y', '/tidak', '/t', '/selesai', '/update'])
+export const FLOW_COMMANDS = new Set(['.batal', '.ya', '.iya', '.y', '.tidak', '.t', '.selesai', '.update'])
 
-const HELP = `DAFTAR PERINTAH BOT PENGUMUMAN
+const LEGACY_HANDLER_COMMANDS = new Set([
+  '.no', '.cancel', '.id', '.set', '.list', '.detail', '.preview', '.edit',
+  '.update', '.hapus', '.send', '.ask', '.models', '.free', '.model', '.search',
+  '.jadwal', '.aturjadwal', '.aktifkan', '.nonaktifkan', '.grup', '.grupaktif',
+  '.daftargrup', '.nondaftargrup', '.template', '.setngaji', '.editngaji',
+  '.previewngaji', '.sendngaji', '.jadwalngaji', '.aturngaji', '.aktifngaji',
+  '.nonaktifngaji', '.vip',
+])
 
-Semua anggota grup bisa memakai perintah ini.
-
-Pengumuman
-/set  Membuat pengumuman baru (panduan bertahap)
-/set <teks>  Langsung simpan teks yang ditempel (cepat)
-/list  Daftar semua pengumuman + isi pesannya
-/detail ID  Melihat detail pengumuman
-/send A1  Kirim manual sekarang ke grup tujuan
-/kirim ID  Alias /send
-/edit ID  Memulai pengeditan pengumuman
-/update  Menyimpan perubahan hasil edit
-/batal  Membatalkan proses buat/edit/hapus
-/hapus ID  Menghapus pengumuman (ada konfirmasi)
-/preview ID  Melihat preview pesan
-/search KATA  Mencari pengumuman
-
-Jadwal
-/jadwal  Melihat seluruh jadwal
-/aturjadwal ID  Mengubah jadwal pengumuman
-/aktifkan ID  Mengaktifkan pengumuman
-/nonaktifkan ID  Menonaktifkan pengumuman
-
-Grup
-/grup  Daftar semua grup yang bisa diakses bot
-/grupaktif  Daftar grup yang terdaftar
-/daftargrup N  Mendaftarkan grup nomor N
-/nondaftargrup N  Mencabut pendaftaran grup N
-
-Lainnya
-/id  Menampilkan nomor Anda dan ID grup ini
-/status  Status koneksi bot
-/help  Menampilkan daftar ini
-
-ID boleh ditulis A1, A001, atau ANN-001 (format lama tetap diterima).
-Status /send dan /kirim memakai reaction pada pesan perintah: ⏳ → ✅ / ❌.
-/menu  Daftar perintah (versi ringkas).
-/vip  Aktivasi VIP lewat private chat (password tidak diketik di grup).
-/ask PERTANYAAN  Bertanya ke AI (model gratis).
-/models, /free  Daftar model gratis.
-/model, /model NOMOR  Lihat/ganti model (ganti: admin).
-Daftar grup (/grup, /grupaktif) hanya untuk admin.
-Contoh cepat: /set <tempel teks pengumuman> lalu /send A1`
+function handlerCommand(command) {
+  return LEGACY_HANDLER_COMMANDS.has(command) ? `/${command.slice(1)}` : command
+}
 
 function cleanInputNgaji(value) { return String(value ?? '').trim() }
 
@@ -111,7 +79,7 @@ async function requireAnnouncement(ctx, arg) {
   const id = findId(arg)
   const row = id ? getAnnouncement(id) : null
   if (!row) {
-    await reply(ctx, `Pengumuman dengan ID "${id || '-'}" tidak ditemukan. Ketik /list untuk melihat ID yang tersedia.`)
+    await reply(ctx, `Pengumuman dengan ID "${id || '-'}" tidak ditemukan. Ketik .list untuk melihat ID yang tersedia.`)
     return null
   }
   return row
@@ -138,7 +106,7 @@ async function handlePrivateVipPassword(ctx, text) {
   const session = vipSession.getSession(ctx.adminJid)
   if (!session) {
     logger.info(`VIP session missing or expired: ${normalizeJid(ctx.adminJid)}`)
-    await reply(ctx, 'Sesi aktivasi tidak ditemukan atau sudah berakhir. Ketik /vip di chat pribadi untuk memulai lagi.')
+    await reply(ctx, 'Sesi aktivasi tidak ditemukan atau sudah berakhir. Ketik .vip di chat pribadi untuk memulai lagi.')
     return
   }
   logger.info(`VIP session validated: ${session.key}`)
@@ -174,57 +142,53 @@ async function handlePrivateVipPassword(ctx, text) {
 export async function handleMessage(ctx) {
   const rawText = String(ctx.text || '')
   const text = rawText.trim()
-  // Perintah admin diawali '/', perintah generator gambar diawali '.'.
   const first = text.split(/\s+/)[0]
-  const isCmd = /^[/][a-z0-9]+/i.test(first) || /^[.][a-z0-9]+/i.test(first)
-  const cmd = isCmd ? first.toLowerCase() : null
+  const cmd = normalizeCommand(first)
+  const isCmd = Boolean(cmd)
+  const commandEnd = isCmd ? rawText.indexOf(first) + first.length : 0
   const arg = cmd
     ? ['.iqc', '.tqc'].includes(cmd)
-      ? rawText.slice(rawText.indexOf(first) + first.length).replace(/^\s+/, '')
-      : text.slice(cmd.length).trim()
+      ? rawText.slice(commandEnd).replace(/^\s+/, '')
+      : rawText.slice(commandEnd).trim()
     : ''
 
   const isGroup = ctx.isGroup !== undefined
     ? Boolean(ctx.isGroup)
     : /@g\.us$/i.test(String(ctx.jid || ''))
+  const registeredAdmin = ctx.isRegisteredAdmin !== undefined ? Boolean(ctx.isRegisteredAdmin) : isRegisteredAdmin(ctx.adminJid)
 
-  // Middleware scope: chat pribadi hanya untuk /vip, /cancel, dan command '.'
-  // yang masuk allowlist. Semua pesan lain di chat pribadi diabaikan tanpa balasan.
+  // Private chat accepts only explicit dot commands, plus a contextual VIP password.
   const PRIVATE_ALLOWED = [
-    '/vip', '/cancel', '.vip', '.menu', '.user', '.ping', '.status', '.info',
+    '.vip', '.cancel', '.menu', '.help', '.user', '.ping', '.status', '.info',
   ]
-  let privatePlainText = false
   if (!isGroup) {
-    if (isCmd && cmd.startsWith('/') && !PRIVATE_ALLOWED.includes(cmd)) return
-    if (isCmd && cmd.startsWith('.') && !PRIVATE_ALLOWED.includes(cmd) && !config.privateDotCommands.includes(cmd)) return
+    if (isCmd && first.startsWith('/')) return
+    const privateCommands = config.privateDotCommands.map(normalizeCommand)
+    if (isCmd && !PRIVATE_ALLOWED.includes(cmd) && !privateCommands.includes(cmd)) return
     if (!isCmd) {
       if (!text) return
-      privatePlainText = true
+      if (vipSession.getSession(ctx.adminJid)) {
+        await handlePrivateVipPassword(ctx, text)
+        return
+      }
+      return
     }
   }
 
   // Group access control: grup baru/default tanpa izin tidak boleh diproses.
   if (isGroup) {
     const registered = groupService.get(ctx.jid)?.is_registered
-    if (!registered) return
+    if (!registered && !(cmd === '.daftargrup' && registeredAdmin)) return
   }
 
-  // Semua orang boleh memakai semua perintah, kecuali daftar grup.
+  // Restrict bot administration to registered admins, independent of OPEN_ACCESS.
   // Gunakan pengecekan admin terdaftar (bukan ctx.admin yang mengikuti OPEN_ACCESS).
-  const registeredAdmin = ctx.isRegisteredAdmin !== undefined ? Boolean(ctx.isRegisteredAdmin) : isRegisteredAdmin(ctx.adminJid)
   if (!registeredAdmin && isCmd && RESTRICTED_COMMANDS.includes(cmd)) {
     logActivity(ctx.adminJid, 'unauthorized_command', text.slice(0, 120), ctx.jid)
-    const message = ['/grup', '/grupaktif'].includes(cmd)
-      ? 'Daftar grup (/grup dan /grupaktif) hanya dapat dilihat admin terdaftar.'
+    const message = ['.grup', '.grupaktif'].includes(cmd)
+      ? 'Daftar grup (.grup dan .grupaktif) hanya dapat dilihat admin terdaftar.'
       : `Perintah ${cmd} hanya untuk admin terdaftar.`
     await reply(ctx, message)
-    return
-  }
-
-  // Password VIP hanya diproses bila memang ada sesi aktif. Tanpa sesi,
-  // percakapan biasa ("Halo", "Apa kabar?") benar-benar diabaikan.
-  if (privatePlainText) {
-    if (vipSession.getSession(ctx.adminJid)) await handlePrivateVipPassword(ctx, text)
     return
   }
 
@@ -246,12 +210,17 @@ export async function handleMessage(ctx) {
   }
 
   if (isCmd) await routeCommand(ctx, cmd, arg)
-  // Pesan biasa tanpa sesi aktif diabaikan (bot hanya merespons perintah / alur).
+  // Plain text without a relevant flow or menu context is ignored.
 }
 
 export async function routeCommand(ctx, cmd, arg) {
+  cmd = normalizeCommand(cmd) || cmd
+  const publicCommand = cmd
+  cmd = handlerCommand(cmd)
   const registeredAdmin = ctx.isRegisteredAdmin !== undefined ? Boolean(ctx.isRegisteredAdmin) : isRegisteredAdmin(ctx.adminJid)
-  if (!['/help', '/menu', '/vip'].includes(cmd)) logActivity(ctx.adminJid, `command${cmd}`, arg.slice(0, 120), ctx.jid)
+  if (!['.help', '.menu', '.vip'].includes(publicCommand)) {
+    logActivity(ctx.adminJid, `command${publicCommand}`, arg.slice(0, 120), ctx.jid)
+  }
 
   switch (cmd) {
     case '/vip':
@@ -262,17 +231,17 @@ export async function routeCommand(ctx, cmd, arg) {
       }
       if (isGroup) {
         // Sesi dibuat di grup agar bisa dilanjutkan di private chat. Idempoten:
-        // dua pesan /vip bersamaan tidak membuat dua sesi atau mereset attempts.
+        // Pesan .vip duplikat tidak membuat sesi baru atau mereset attempts.
         vipSession.startSession(ctx.adminJid, await identityAliases(ctx), ctx.jid)
         const botNumber = normalizeJid(ctx.bot?.status?.().botNumber || '')
         const link = botNumber
-          ? `https://wa.me/${botNumber}?text=${encodeURIComponent('/vip')}`
+          ? `https://wa.me/${botNumber}?text=${encodeURIComponent('.vip')}`
           : ''
         return reply(ctx, [
           '🔐 VIP ACTIVATION',
           'Untuk keamanan akun, silakan lanjutkan aktivasi VIP melalui private chat bot.',
           '',
-          'Silakan chat bot secara pribadi dan ketik "/vip".',
+          'Silakan chat bot secara pribadi dan ketik ".vip".',
           link ? `\nTautan: ${link}` : '',
         ].filter(Boolean).join('\n'))
       }
@@ -282,7 +251,7 @@ export async function routeCommand(ctx, cmd, arg) {
         return reply(ctx, `Sesi masih terkunci. Coba lagi dalam ${minutes} menit.`)
       }
       if (session) {
-        return reply(ctx, 'Sesi aktivasi masih aktif. Masukkan password VIP Anda atau ketik /cancel.')
+        return reply(ctx, 'Sesi aktivasi masih aktif. Masukkan password VIP Anda atau ketik .cancel.')
       }
       vipSession.startSession(ctx.adminJid, await identityAliases(ctx), ctx.jid)
       return reply(ctx, [
@@ -298,12 +267,12 @@ export async function routeCommand(ctx, cmd, arg) {
         return reply(ctx, 'Perintah pencabutan VIP hanya untuk admin terdaftar.')
       }
       const raw = arg.trim()
-      if (!/^vip\b/i.test(raw)) return reply(ctx, 'Contoh: /no vip @628123456789')
+      if (!/^vip\b/i.test(raw)) return reply(ctx, 'Contoh: .no vip @628123456789')
       const mention = ctx.message?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
       const target = mention || raw.replace(/^vip\s*/i, '').trim()
-      if (!target) return reply(ctx, 'Contoh: /no vip @628123456789')
+      if (!target) return reply(ctx, 'Contoh: .no vip @628123456789')
       const number = normalizeJid(target)
-      if (!number) return reply(ctx, 'Nomor pengguna tidak valid. Contoh: /no vip @628123456789')
+      if (!number) return reply(ctx, 'Nomor pengguna tidak valid. Contoh: .no vip @628123456789')
       try {
         if (!isVip(`${number}@s.whatsapp.net`)) {
           return reply(ctx, `Pengguna ${number} tidak memiliki status VIP.`)
@@ -319,7 +288,7 @@ export async function routeCommand(ctx, cmd, arg) {
     }
 
     case '/cancel': {
-      if (ctx.isGroup !== false) return reply(ctx, 'Perintah /cancel hanya untuk sesi di chat pribadi.')
+      if (ctx.isGroup !== false) return reply(ctx, 'Perintah .cancel hanya untuk sesi di chat pribadi.')
       vipSession.clearSession(ctx.adminJid)
       return reply(ctx, 'Sesi aktivasi VIP dibatalkan.')
     }
@@ -404,7 +373,12 @@ export async function routeCommand(ctx, cmd, arg) {
     case '.menu': return sendPersonalMenu(ctx)
 
     case '/help':
-    case '.help': return reply(ctx, HELP)
+    case '.help': return reply(ctx, buildMenuText({
+      admin: registeredAdmin,
+      vip: isVip(ctx.adminJid),
+      privateChat: ctx.isGroup === false,
+      privateCommands: config.privateDotCommands.map(normalizeCommand).filter(Boolean),
+    }))
 
     case '.user': {
       const role = roleOf(ctx.adminJid)
@@ -416,7 +390,7 @@ export async function routeCommand(ctx, cmd, arg) {
         `Role: ${role}`,
         `Status: ${vip ? 'VIP ACTIVE' : 'ACTIVE'}`,
         `Mode: ${ctx.isGroup ? 'GROUP' : 'PRIVATE'}`,
-        '', 'KAYY ASSISTANT — Powered by Dev RifaiAl',
+        '', 'LUX BOT — Dev By Rifai',
       ].join('\n'))
     }
 
@@ -431,15 +405,15 @@ export async function routeCommand(ctx, cmd, arg) {
         'Server: UP',
         `Uptime: ${Math.round(process.uptime())} detik`,
         `Waktu: ${new Date().toLocaleTimeString('id-ID', { timeZone:'Asia/Jakarta', hour12:false })} WIB`,
-        '', 'KAYY ASSISTANT — Powered by Dev RifaiAl',
+        '', 'LUX BOT — Dev By Rifai',
       ].join('\n'))
     }
 
     case '.info': {
       const role = roleOf(ctx.adminJid)
       return reply(ctx, [
-        'ℹ️ *KAYY ASSISTANT*', '',
-        'Powered by Dev RifaiAl',
+        'ℹ️ *LUX BOT*', '',
+        'Dev By Rifai',
         `Versi: ${config.appVersion || '1.0.0'}`,
         `Fitur aktif (${role}): ${featureService.countActiveFeatures(role)}`,
         `Role Anda: ${role}`,
@@ -504,7 +478,7 @@ export async function routeCommand(ctx, cmd, arg) {
     case '.toanime':
     case '.tocartoon':
     case '.toreal':
-      return reply(ctx, `${cmd} belum tersedia: mengubah piksel gambar memerlukan image-editing API yang tidak dikonfigurasi di bot ini. Fitur yang tersedia: .img (analisis), .iqc/.tqc/.wq (quote), .rvo (foto biasa). KAYY ASSISTANT — By Dev RifaiAl`)
+      return reply(ctx, `${cmd} belum tersedia: mengubah piksel gambar memerlukan image-editing API yang tidak dikonfigurasi di bot ini. Fitur yang tersedia: .img (analisis), .iqc/.tqc/.wq (quote), .rvo (foto biasa). LUX BOT — Dev By Rifai`)
     case '.tiktok':
     case '.instagram': return downloaderCommand(ctx, cmd, arg)
 
@@ -518,16 +492,16 @@ export async function routeCommand(ctx, cmd, arg) {
         const id = createQuickAnnouncement(arg, ctx.adminJid, ctx.jid, targets)
         const preview = arg.length > 160 ? `${arg.slice(0, 160)}…` : arg
         const targetNames = targets.map((jid) => groupService.get(jid)?.name || shortJid(jid)).join(', ') || '-'
-        return reply(ctx, `PENGUMUMAN TERSIMPAN (mode cepat)\n\nID: ${id}\nJudul: ${getAnnouncement(id)?.title || '-'}\nIsi: ${preview}\n\nStatus: NONAKTIF (tidak dikirim otomatis)\nGrup tujuan: ${targetNames}\n\nKirim manual: /send ${id}\nJadwalkan: /aturjadwal ${id} lalu /aktifkan ${id}\nLihat semua: /list`)
+        return reply(ctx, `PENGUMUMAN TERSIMPAN (mode cepat)\n\nID: ${id}\nJudul: ${getAnnouncement(id)?.title || '-'}\nIsi: ${preview}\n\nStatus: NONAKTIF (tidak dikirim otomatis)\nGrup tujuan: ${targetNames}\n\nKirim manual: .send ${id}\nJadwalkan: .aturjadwal ${id} lalu .aktifkan ${id}\nLihat semua: .list`)
       }
       setFlow(ctx, { type: 'create', step: 'title', data: { title: '', body: '', category: '', weekday: 0, week: 0, time: '08:00', targets: [], sourceGroup: ctx.jid } })
-      return reply(ctx, 'BUAT PENGUMUMAN BARU\n\nKetik judul pengumuman.\n\nContoh: "Pengumuman Kerja Bakti" atau judul lain sesuai kebutuhan.\nKetik /batal kapan saja untuk membatalkan.')
+      return reply(ctx, 'BUAT PENGUMUMAN BARU\n\nKetik judul pengumuman.\n\nContoh: "Pengumuman Kerja Bakti" atau judul lain sesuai kebutuhan.\nKetik .batal kapan saja untuk membatalkan.')
     }
 
     case '/list': {
       const rows = listAnnouncements({ activeOnly: /aktif/i.test(arg) })
-      if (!rows.length) return reply(ctx, 'Belum ada pengumuman. Ketik /set untuk membuat yang pertama.')
-      return reply(ctx, `DAFTAR PENGUMUMAN (${rows.length})\n\n${rows.map(listBlock).join('\n\n')}\n\nKetik /detail ID untuk detail lengkap atau /send ID untuk mengirim manual.`)
+      if (!rows.length) return reply(ctx, 'Belum ada pengumuman. Ketik .set untuk membuat yang pertama.')
+      return reply(ctx, `DAFTAR PENGUMUMAN (${rows.length})\n\n${rows.map(listBlock).join('\n\n')}\n\nKetik .detail ID untuk detail lengkap atau .send ID untuk mengirim manual.`)
     }
 
     case '/detail': {
@@ -549,14 +523,14 @@ export async function routeCommand(ctx, cmd, arg) {
       if (!started) return reply(ctx, 'Gagal memulai sesi edit.')
       setFlow(ctx, { type: 'edit', id: row.id, field: null, step: 'select_field' })
       const s = getSchedule(row.id)
-      return reply(ctx, `EDIT ${row.id}\n\nJudul: ${row.title}\nIsi: ${String(row.body).slice(0, 80)}${row.body.length > 80 ? '…' : ''}\nJadwal: ${dayName(s?.weekday)} / ${weekName(s?.week_of_month)} / ${timeName(s?.time)}\nGrup tujuan: ${getTargets(row.id).length}\n\nPilih bagian yang ingin diubah:\n${FIELD_ORDER.map((f, i) => `${i + 1}. ${FIELD_LABELS[f]}`).join('\n')}\n\nSetelah selesai ketik /update, lalu /ya untuk menyimpan. /batal membuang perubahan.`)
+      return reply(ctx, `EDIT ${row.id}\n\nJudul: ${row.title}\nIsi: ${String(row.body).slice(0, 80)}${row.body.length > 80 ? '…' : ''}\nJadwal: ${dayName(s?.weekday)} / ${weekName(s?.week_of_month)} / ${timeName(s?.time)}\nGrup tujuan: ${getTargets(row.id).length}\n\nPilih bagian yang ingin diubah:\n${FIELD_ORDER.map((f, i) => `${i + 1}. ${FIELD_LABELS[f]}`).join('\n')}\n\nSetelah selesai ketik .update, lalu .ya untuk menyimpan. .batal membuang perubahan.`)
     }
 
     case '/update': {
       // Jika sesi edit ada di DB tapi flow hilang (mis. setelah restart).
       if (!getFlow(ctx)) startEditDiffFallback(ctx)
-      const handled = await handleFlow(ctx, '/update', '')
-      if (!handled) return reply(ctx, '/update ditolak: tidak ada sesi pengeditan aktif. Mulai dengan /edit ID.')
+      const handled = await handleFlow(ctx, '.update', '')
+      if (!handled) return reply(ctx, '.update ditolak: tidak ada sesi pengeditan aktif. Mulai dengan .edit ID.')
       return
     }
 
@@ -564,7 +538,7 @@ export async function routeCommand(ctx, cmd, arg) {
       const row = await requireAnnouncement(ctx, arg)
       if (!row) return
       setFlow(ctx, { type: 'delete', id: row.id, step: 'confirm' })
-      return reply(ctx, `YAKIN MENGHAPUS ${row.id} — ${row.title}?\n\nJadwal dan grup tujuan ikut terhapus. Ketik /ya untuk konfirmasi atau /batal.`)
+      return reply(ctx, `YAKIN MENGHAPUS ${row.id} — ${row.title}?\n\nJadwal dan grup tujuan ikut terhapus. Ketik .ya untuk konfirmasi atau .batal.`)
     }
 
     case '/kirim':
@@ -580,7 +554,7 @@ export async function routeCommand(ctx, cmd, arg) {
     }
 
     case '/ask': {
-      if (!arg) return reply(ctx, 'Contoh: /ask Apa itu AI Agent?')
+      if (!arg) return reply(ctx, 'Contoh: .ask Apa itu AI Agent?')
       return runAsk(ctx, arg)
     }
 
@@ -614,7 +588,7 @@ export async function routeCommand(ctx, cmd, arg) {
     }
 
     case '/search': {
-      if (!arg) return reply(ctx, 'Contoh: /search rapat')
+      if (!arg) return reply(ctx, 'Contoh: .search rapat')
       const rows = listAnnouncements({ search: arg })
       if (!rows.length) return reply(ctx, `Tidak ada pengumuman yang cocok dengan "${arg}".`)
       return reply(ctx, `HASIL PENCARIAN "${arg}" (${rows.length})\n\n${rows.map(listLine).join('\n')}`)
@@ -651,7 +625,7 @@ export async function routeCommand(ctx, cmd, arg) {
 
     case '/grupaktif': {
       const groups = groupService.list({ registeredOnly: true })
-      if (!groups.length) return reply(ctx, 'Belum ada grup terdaftar. Ketik /grup untuk melihat daftar lalu /daftargrup N.')
+      if (!groups.length) return reply(ctx, 'Belum ada grup terdaftar. Ketik .grup untuk melihat daftar lalu .daftargrup N.')
       return reply(ctx, `GRUP TERDAFTAR (${groups.length})\n\n${groupService.listForDisplay(true)}`)
     }
 
@@ -660,14 +634,14 @@ export async function routeCommand(ctx, cmd, arg) {
       const groups = groupService.list(false)
       const idx = Number(String(arg).trim()) - 1
       const g = groups[idx]
-      if (!g) return reply(ctx, `Nomor grup tidak valid. Ketik /grup untuk melihat daftar, lalu ${cmd} N.`)
+      if (!g) return reply(ctx, `Nomor grup tidak valid. Ketik .grup untuk melihat daftar, lalu ${publicCommand} N.`)
       const register = cmd === '/daftargrup'
       groupService.setRegistered(g.jid, register)
       return reply(ctx, `${groupLabel(g)} sekarang ${register ? 'TERDAFTAR' : 'TIDAK terdaftar'} sebagai tujuan pengumuman.`)
     }
 
     case '/template':
-      if (cleanInputNgaji(arg).toLowerCase() !== 'ngaji') return reply(ctx, 'Contoh: /template ngaji')
+      if (cleanInputNgaji(arg).toLowerCase() !== 'ngaji') return reply(ctx, 'Contoh: .template ngaji')
       return ngajiShowTemplate(ctx)
 
     case '/setngaji': return ngajiSet(ctx, arg)
@@ -686,6 +660,6 @@ export async function routeCommand(ctx, cmd, arg) {
     }
 
     default:
-      return reply(ctx, `Perintah "${cmd}" tidak dikenal. Ketik /help untuk daftar perintah.`)
+      return reply(ctx, `Perintah "${publicCommand}" tidak dikenal. Ketik .help untuk daftar perintah.`)
   }
 }

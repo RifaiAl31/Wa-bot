@@ -45,7 +45,7 @@ async function optionalBackground(ctx, c, width, height, opacity) {
 }
 
 export async function renderLogo3d(ctx) {
-  const text = String(ctx.arg || '').trim() || 'KAYY ASSISTANT'
+  const text = String(ctx.arg || '').trim() || 'LUX BOT'
   const width = 800; const height = 400
   const canvas = createCanvas(width, height)
   const g = canvas.getContext('2d')
@@ -104,7 +104,7 @@ export async function renderLogo3d(ctx) {
 }
 
 export async function renderLogoGold(ctx) {
-  const text = String(ctx.arg || '').trim() || 'KAYY ASSISTANT'
+  const text = String(ctx.arg || '').trim() || 'LUX BOT'
   const width = 800; const height = 350
   const canvas = createCanvas(width, height)
   const g = canvas.getContext('2d')
@@ -172,7 +172,7 @@ export async function handleMakerCommand(ctx, cmd, arg) {
     const buffer = cmd === '.logo3d' ? await renderLogo3d(makerCtx) : await renderLogoGold(makerCtx)
     await ctx.sock.sendMessage(ctx.jid, {
       image: buffer,
-      caption: `✨ ${cmd === '.logo3d' ? 'LOGO 3D' : 'LOGO GOLD'}\nKAYY ASSISTANT — By Dev RifaiAl`,
+      caption: `✨ ${cmd === '.logo3d' ? 'LOGO 3D' : 'LOGO GOLD'}\nLUX BOT — Dev By Rifai`,
     })
     return { ok: true }
   } catch (err) {

@@ -40,12 +40,12 @@ export const aiService = {
     const groupJid = ctx?.jid || ''
     const limit = checkLimits(userJid, groupJid)
     if (!limit.ok) {
-      recordUsage({ userJid, groupJid, command: '/ask', status: 'blocked', reason: limit.reason, windowStart: limit.windowStart })
+      recordUsage({ userJid, groupJid, command: '.ask', status: 'blocked', reason: limit.reason, windowStart: limit.windowStart })
       const silent = limit.kind === 'cooldown' && !shouldNotifyCooldown(userJid, 'ask')
       return { ok: false, message: silent ? null : limit.reason, reason: limit.reason, silent }
     }
     const q = String(question || '').trim()
-    if (!q) return { ok: false, message: 'Pertanyaan kosong. Contoh: /ask Apa itu AI Agent?' }
+    if (!q) return { ok: false, message: 'Pertanyaan kosong. Contoh: .ask Apa itu AI Agent?' }
     if (q.length > config.aiMaxQuestionChars) {
       return { ok: false, message: `Pertanyaan terlalu panjang. Maksimal ${config.aiMaxQuestionChars} karakter.` }
     }
@@ -61,12 +61,12 @@ export const aiService = {
     try {
       answer = await askModel({ modelId: model.id, question: q, context: history })
     } catch (err) {
-      recordUsage({ userJid, groupJid, command: '/ask', modelId: model.id, status: 'failed',
+      recordUsage({ userJid, groupJid, command: '.ask', modelId: model.id, status: 'failed',
         reason: err.message, promptChars: q.length, windowStart: limit.windowStart })
       return { ok: false, message: err.message || 'Layanan AI sedang tidak tersedia.', code: err.code }
     }
 
-    recordUsage({ userJid, groupJid, command: '/ask', modelId: model.id, status: 'success',
+    recordUsage({ userJid, groupJid, command: '.ask', modelId: model.id, status: 'success',
       promptChars: q.length, responseChars: answer.length, windowStart: limit.windowStart })
     if (config.aiContextMessages > 0) {
       contexts.set(key, [...history, { role: 'user', content: q }, { role: 'assistant', content: answer }]
@@ -80,7 +80,7 @@ export const aiService = {
   },
 
   // Fitur AI turunan (.aiwrite, .rewrite, .fixcode, ...) memakai kuota yang
-  // SAMA dengan /ask dan provider/model yang sudah dikonfigurasi.
+  // SAMA dengan .ask dan provider/model yang sudah dikonfigurasi.
   async askWithPrompt(ctx, { prompt = '', label = 'AI', command = '.ai' } = {}) {
     const userJid = ctx?.adminJid || ''
     const groupJid = ctx?.jid || ''
@@ -111,7 +111,7 @@ export const aiService = {
       promptChars: text.length, responseChars: answer.length, windowStart: limit.windowStart })
     return {
       ok: true, model, answer,
-      text: [`✨ *${label}*`, '', answer, '', `Model: ${model.name} (Free)`, 'KAYY ASSISTANT — By Dev RifaiAl'].join('\n'),
+      text: [`✨ *${label}*`, '', answer, '', `Model: ${model.name} (Free)`, 'LUX BOT — Dev By Rifai'].join('\n'),
     }
   },
 }
